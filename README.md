@@ -4,13 +4,16 @@ A sleek, glassmorphic **Daily Habit Matrix Spreadsheet & Productivity Analytics 
 
 ---
 
-## 🌐 Direct Live Deployment Links
+## 🌐 Direct Live Deployment & Download Links
 
-### 👉 **[Live Vercel Application](https://task-tracker-excel-bg2hkzoch-amol-w-codes-projects.vercel.app)**
-*(Full Express Cloud Engine with live SQLite `/tmp` serverless storage & 6-digit email verification)*
+### 👉 **[Live Vercel Application](https://task-tracker-excel-amol-w-codes-projects.vercel.app)**
+*(Full Express Cloud Engine with live SQLite storage & real email verification)*
 
 ### 👉 **[Live GitHub Pages Webhost](https://amol-w-code.github.io/task-tracker-excel/)**
-*(Standalone static webhost with SheetJS browser spreadsheet generation)*
+*(Standalone static webhost optimized for mobile and desktop browser usage)*
+
+### 📥 **[1-Click Download Full App Package (.ZIP)](https://github.com/amol-w-code/task-tracker-excel/archive/refs/heads/main.zip)**
+*(Click above to instantly download the complete app codebase & standalone files to your computer or phone!)*
 
 ---
 
