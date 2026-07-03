@@ -8,14 +8,13 @@ let currentAuthTab = 'login';
 let deferredPrompt = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Register Service Worker for PWA Mobile/Tablet Support
+  // 1. Service Worker for PWA
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
-      .then(() => console.log('Service Worker registered for PWA offline mobile support'))
+      .then(() => console.log('Service Worker registered'))
       .catch((err) => console.log('SW error:', err));
   }
 
-  // Intercept PWA install prompt
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
@@ -27,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         deferredPrompt.userChoice.then((choice) => {
           if (choice.outcome === 'accepted') {
             installBtn.style.display = 'none';
-            showToast('Installing Habit Studio to home screen...', 'cyan');
+            showToast('Installing Habit Studio app...', 'cyan');
           }
           deferredPrompt = null;
         });
@@ -44,32 +43,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 3. Quick Habit Creator Form
+  // 3. Quick Habit Creator Forms (Main page & Center FAB Modal)
   const habitForm = document.getElementById('habit-creator-form');
   if (habitForm) {
-    habitForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const titleInput = document.getElementById('new-habit-title');
-      const category = document.getElementById('new-habit-category').value;
+    habitForm.addEventListener('submit', (e) => handleAddHabitSubmit(e, 'new-habit-title', 'new-habit-category'));
+  }
 
-      if (!titleInput.value.trim()) return;
-
-      try {
-        const res = await fetchWithAuth('/api/matrix/habit', {
-          method: 'POST',
-          body: JSON.stringify({ title: titleInput.value.trim(), category })
-        });
-        const data = await res.json();
-        if (data.success) {
-          titleInput.value = '';
-          showToast('Habit added to your private matrix!', 'emerald');
-          loadMatrix();
-          loadAnalytics();
-        }
-      } catch (err) {
-        console.error(err);
-        showToast('Error adding habit', 'rose');
-      }
+  const fabForm = document.getElementById('fab-habit-form');
+  if (fabForm) {
+    fabForm.addEventListener('submit', async (e) => {
+      await handleAddHabitSubmit(e, 'fab-habit-title', 'fab-habit-category');
+      closeModal('modal-add-habit');
     });
   }
 
@@ -85,26 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 5. Excel Export
+  // 5. Excel Export Button
   const btnExport = document.getElementById('btn-export-excel');
   if (btnExport) {
-    btnExport.addEventListener('click', async () => {
-      showToast('Generating personalized Excel (.xlsx) Report...', 'cyan');
-      const token = localStorage.getItem('taskpulse_token');
-      const res = await fetch(`/api/excel/export?days=${currentDaysView}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Habits_${localStorage.getItem('taskpulse_user') || 'AmolKumarSingh'}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
-    });
+    btnExport.addEventListener('click', triggerExcelExport);
   }
 
   // 6. Auth Form Handler
@@ -145,11 +113,95 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Check Auth on Startup
   initAuth();
 });
 
-// Helper: fetch with Auth header
+async function handleAddHabitSubmit(e, titleId, categoryId) {
+  e.preventDefault();
+  const titleInput = document.getElementById(titleId);
+  const category = document.getElementById(categoryId).value;
+
+  if (!titleInput.value.trim()) return;
+
+  try {
+    const res = await fetchWithAuth('/api/matrix/habit', {
+      method: 'POST',
+      body: JSON.stringify({ title: titleInput.value.trim(), category })
+    });
+    const data = await res.json();
+    if (data.success) {
+      titleInput.value = '';
+      showToast('Habit added to your matrix!', 'emerald');
+      loadMatrix();
+      loadAnalytics();
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Error adding habit', 'rose');
+  }
+}
+
+// Navigation Bar Handlers matching user screenshot
+function navSwitchTo(view) {
+  document.querySelectorAll('.nav-item').forEach((el, idx) => {
+    if ((view === 'home' && idx === 0) || (view === 'analytics' && idx === 1)) {
+      el.classList.add('active');
+    } else {
+      el.classList.remove('active');
+    }
+  });
+
+  const target = view === 'home' ? document.getElementById('section-matrix') : document.getElementById('section-analytics');
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+function openAddHabitModal() {
+  const modal = document.getElementById('modal-add-habit');
+  if (modal) {
+    modal.style.display = 'flex';
+    setTimeout(() => {
+      const input = document.getElementById('fab-habit-title');
+      if (input) input.focus();
+    }, 100);
+  }
+}
+
+function openProfileModal() {
+  const modal = document.getElementById('modal-profile');
+  if (modal) {
+    const username = localStorage.getItem('taskpulse_user') || 'AmolKumarSingh';
+    document.getElementById('profile-modal-name').textContent = `@${username}`;
+    const elStreak = document.getElementById('stat-streak');
+    document.getElementById('profile-streak-val').textContent = elStreak ? elStreak.textContent : '0 Days';
+    modal.style.display = 'flex';
+  }
+}
+
+function closeModal(modalId) {
+  const m = document.getElementById(modalId);
+  if (m) m.style.display = 'none';
+}
+
+async function triggerExcelExport() {
+  showToast('Generating personalized Excel (.xlsx) Report...', 'cyan');
+  const token = localStorage.getItem('taskpulse_token');
+  const res = await fetch(`/api/excel/export?days=${currentDaysView}`, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+  });
+  if (res.ok) {
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Habits_${localStorage.getItem('taskpulse_user') || 'AmolKumarSingh'}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+}
+
 async function fetchWithAuth(url, options = {}) {
   const token = localStorage.getItem('taskpulse_token');
   const headers = options.headers || {};
@@ -200,7 +252,6 @@ function logoutUser() {
   showToast('Signed out successfully', 'cyan');
 }
 
-// Load Habit Matrix Grid
 async function loadMatrix() {
   const thead = document.getElementById('matrix-thead');
   const tbody = document.getElementById('matrix-tbody');
@@ -364,8 +415,8 @@ function renderMonthlyChart(monthlyData) {
   const pctData = monthlyData.map(d => d.percentage);
 
   const gradient = ctx.createLinearGradient(0, 0, 0, 250);
-  gradient.addColorStop(0, 'rgba(6, 182, 212, 0.45)');
-  gradient.addColorStop(1, 'rgba(6, 182, 212, 0.0)');
+  gradient.addColorStop(0, 'rgba(99, 102, 241, 0.45)');
+  gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
 
   if (monthlyLineChart) monthlyLineChart.destroy();
 
@@ -376,14 +427,14 @@ function renderMonthlyChart(monthlyData) {
       datasets: [{
         label: 'Daily Completion Rate (%)',
         data: pctData,
-        borderColor: '#06b6d4',
+        borderColor: '#6366f1',
         borderWidth: 3,
         backgroundColor: gradient,
         fill: true,
         tension: 0.4,
         pointRadius: 3,
         pointHoverRadius: 6,
-        pointBackgroundColor: '#06b6d4'
+        pointBackgroundColor: '#6366f1'
       }]
     },
     options: {
@@ -405,7 +456,7 @@ function renderCategoryChart(categoriesData) {
   
   const labels = categoriesData.map(c => c.category);
   const data = categoriesData.map(c => c.count);
-  const colors = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#f43f5e'];
+  const colors = ['#10b981', '#6366f1', '#8b5cf6', '#f59e0b', '#f43f5e'];
 
   if (categoryDonutChart) categoryDonutChart.destroy();
 
@@ -447,7 +498,7 @@ function showToast(message, type = 'emerald') {
   toast.className = 'toast';
   
   let borderColor = '#10b981';
-  if (type === 'cyan') borderColor = '#06b6d4';
+  if (type === 'cyan') borderColor = '#6366f1';
   if (type === 'rose') borderColor = '#f43f5e';
   
   toast.style.borderLeftColor = borderColor;
