@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const emailOrUsername = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value.trim();
-      const username = document.getElementById('auth-username').value.trim() || emailOrUsername.split('@')[0];
+      const username = document.getElementById('auth-username').value.trim() || emailOrUsername.split('@')[0] || 'User';
 
       if (isStaticHost) {
         if (currentAuthTab === 'register') {
@@ -200,7 +200,7 @@ function getLocalHabits() {
   if (saved) return JSON.parse(saved);
   const defaults = [
     { id: 1, title: 'Wake up at 05:00 ⏰', category: 'Health' },
-    { id: 2, title: 'Gym 💪', category: 'Health' },
+    { id: 2, title: 'Gym Workout 💪', category: 'Health' },
     { id: 3, title: 'Deep Work Session 🎯', category: 'Work' },
     { id: 4, title: 'Reading / Learning 📖', category: 'Learning' },
     { id: 5, title: 'Budget Tracking 💰', category: 'Finance' }
