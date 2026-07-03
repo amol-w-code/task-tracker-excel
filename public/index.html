@@ -14,46 +14,66 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   
-  <!-- Chart.js & SheetJS for Standalone GitHub Pages Offline Analytics & Excel Export -->
+  <!-- Chart.js & SheetJS for Standalone Offline Analytics & Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <div class="background-glow"></div>
 
-  <!-- Authentication Modal / Portal -->
+  <!-- Authentication & Email Verification Portal -->
   <div id="auth-modal" class="auth-overlay">
     <div class="auth-card glass-panel">
-      <div class="auth-header">
-        <div class="logo-icon">📊</div>
-        <h2>Welcome to TaskPulse Studio</h2>
-        <p id="auth-subtitle">Login to load your private Habit Matrix</p>
+      
+      <!-- Main Login / Register View -->
+      <div id="auth-main-view">
+        <div class="auth-header">
+          <div class="logo-icon">📊</div>
+          <h2>TaskPulse Studio</h2>
+          <p id="auth-subtitle">Login to access your private Habit Matrix</p>
+        </div>
+
+        <div class="auth-tabs">
+          <button id="tab-login" class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+          <button id="tab-register" class="auth-tab" onclick="switchAuthTab('register')">Create Account</button>
+        </div>
+
+        <form id="form-auth" class="auth-form">
+          <div id="field-username" class="form-group" style="display: none;">
+            <label>Username</label>
+            <input type="text" id="auth-username" placeholder="e.g. AmolSingh">
+          </div>
+          <div class="form-group">
+            <label id="label-email">Email or Username</label>
+            <input type="text" id="auth-email" placeholder="you@example.com" required>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="auth-password" placeholder="••••••••" required>
+          </div>
+          <button type="submit" id="btn-auth-submit" class="btn-primary auth-submit-btn">Sign In to Matrix</button>
+        </form>
       </div>
 
-      <div class="auth-tabs">
-        <button id="tab-login" class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
-        <button id="tab-register" class="auth-tab" onclick="switchAuthTab('register')">Create Account</button>
+      <!-- Email Verification Step View -->
+      <div id="verify-email-view" style="display: none;">
+        <div class="auth-header">
+          <div class="logo-icon">📧</div>
+          <h2>Verify Your Email</h2>
+          <p id="verify-subtitle">Enter the 6-digit verification code sent to your email address.</p>
+        </div>
+        <form id="form-verify-email" class="auth-form">
+          <div class="form-group">
+            <label>6-Digit Verification Code</label>
+            <input type="text" id="verify-code-input" placeholder="e.g. 849201" maxlength="6" required style="text-align: center; font-size: 1.5rem; letter-spacing: 8px; font-weight: 700;">
+          </div>
+          <button type="submit" class="btn-primary auth-submit-btn">Verify & Unlock Matrix</button>
+        </form>
+        <div style="margin-top: 16px;">
+          <span onclick="switchAuthTab('login'); document.getElementById('verify-email-view').style.display='none'; document.getElementById('auth-main-view').style.display='block';" style="cursor:pointer; color: var(--text-muted); font-size: 0.85rem;">← Back to Sign In</span>
+        </div>
       </div>
 
-      <form id="form-auth" class="auth-form">
-        <div id="field-username" class="form-group" style="display: none;">
-          <label>Username</label>
-          <input type="text" id="auth-username" placeholder="e.g. AmolSingh">
-        </div>
-        <div class="form-group">
-          <label id="label-email">Email or Username</label>
-          <input type="text" id="auth-email" placeholder="demo@taskpulse.com" required>
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="auth-password" placeholder="••••••••" required>
-        </div>
-        <button type="submit" id="btn-auth-submit" class="btn-primary auth-submit-btn">Sign In to Matrix</button>
-      </form>
-
-      <div class="auth-footer">
-        <span onclick="loginAsDemo()" class="demo-link">⚡ Or Click Here to try Demo Account right now</span>
-      </div>
     </div>
   </div>
 
@@ -91,8 +111,8 @@
         <button onclick="closeModal('modal-profile')" class="btn-close">✕</button>
       </div>
       <div class="profile-avatar-big">👤</div>
-      <h3 id="profile-modal-name" style="margin-top: 10px; font-size: 1.5rem;">@AmolKumarSingh</h3>
-      <p id="profile-modal-email" style="color: var(--text-muted); font-size: 0.9rem;">demo@taskpulse.com</p>
+      <h3 id="profile-modal-name" style="margin-top: 10px; font-size: 1.5rem;">@User</h3>
+      <p id="profile-modal-email" style="color: var(--text-muted); font-size: 0.9rem;">Verified Member ☑️</p>
       
       <div class="profile-stats-box" style="margin: 20px 0;">
         <div class="stat-pill">
@@ -123,7 +143,7 @@
 
         <div id="user-profile-badge" class="user-badge glass-card" onclick="openProfileModal()" style="cursor: pointer;">
           <span class="user-avatar">👤</span>
-          <span id="user-display-name">@AmolKumarSingh</span>
+          <span id="user-display-name">@User</span>
         </div>
 
         <button id="btn-export-excel" class="btn-excel">
@@ -236,10 +256,7 @@
     </main>
   </div>
 
-  <!-- ==========================================
-       REFERENCE FLOATING BOTTOM NAVIGATION BAR
-       Designed matching user screenshot with elevated center FAB!
-  ========================================== -->
+  <!-- REFERENCE FLOATING BOTTOM NAVIGATION BAR -->
   <nav class="mobile-bottom-nav">
     <div class="nav-item active" onclick="navSwitchTo('home')">
       <span class="nav-icon">🏠</span>
@@ -251,7 +268,6 @@
       <span class="nav-label">Charts</span>
     </div>
 
-    <!-- Elevated Center Floating Action Button -->
     <div class="nav-center-fab-container">
       <div class="nav-center-fab-ring">
         <button class="nav-center-fab" onclick="openAddHabitModal()" title="Add Habit">

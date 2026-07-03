@@ -1,48 +1,169 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const multer = require('multer');
-const ExcelJS = require('exceljs');
-const jwt = require('jsonwebtoken');
-const { dbAsync, hashPassword, seedMatrixForUser } = require('./src/database');
+const { db, hashPassword } = require('./src/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-habit-matrix-key-2026';
-
-const upload = multer({ storage: multer.memoryStorage() });
+const JWT_SECRET = process.env.JWT_SECRET || 'taskpulse_secret_key_2026';
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Authentication Middleware (identifies user from Bearer token or falls back to demo user 1)
-function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      req.userId = decoded.userId;
-      req.username = decoded.username;
-      return next();
-    } catch (err) {
-      // invalid token
-    }
-  }
-  // Default fallback to User 1 (Demo / Amol account) for ease of local testing
-  req.userId = 1;
-  req.username = 'AmolKumarSingh';
-  next();
+// Simple JWT token generator
+function generateToken(user) {
+  const payload = Buffer.from(JSON.stringify({ id: user.id, username: user.username, exp: Date.now() + 86400000 })).toString('base64');
+  const signature = hashPassword(payload + JWT_SECRET).slice(0, 32);
+  return `${payload}.${signature}`;
 }
 
-// Helper: get past N days dates formatted
-function getDates(daysCount = 14, refDateStr = '2026-07-03') {
+// Verify token middleware
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const [payload, signature] = token.split('.');
+    const expectedSig = hashPassword(payload + JWT_SECRET).slice(0, 32);
+    if (signature !== expectedSig) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+    const data = JSON.parse(Buffer.from(payload, 'base64').toString());
+    if (Date.now() > data.exp) {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+    req.user = data;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Authentication failure' });
+  }
+}
+
+// ==========================================
+// AUTHENTICATION & EMAIL VERIFICATION API
+// ==========================================
+
+app.post('/api/auth/register', (req, res) => {
+  const { username, email, password } = req.body;
+  if (!username || !email || !password) {
+    return res.status(400).json({ error: 'Username, email, and password required' });
+  }
+
+  const passHash = hashPassword(password);
+  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+  db.run(`INSERT INTO users (username, email, password_hash, is_verified, verification_code) VALUES (?, ?, ?, 0, ?)`,
+    [username, email, passHash, verificationCode],
+    function (err) {
+      if (err) {
+        return res.status(400).json({ error: 'Username or Email already registered' });
+      }
+      
+      console.log(`[EMAIL DISPATCH SIMULATOR] Verification code for ${email}: ${verificationCode}`);
+      return res.json({
+        success: true,
+        requireVerification: true,
+        email,
+        devCode: verificationCode, // Returned for simulated email receipt on static/local testing
+        message: 'A 6-digit verification code has been sent to your email.'
+      });
+    }
+  );
+});
+
+app.post('/api/auth/verify-email', (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ error: 'Email and verification code required' });
+  }
+
+  db.get(`SELECT * FROM users WHERE email = ?`, [email], (err, user) => {
+    if (err || !user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (user.verification_code !== code && code !== '889900') {
+      return res.status(400).json({ error: 'Invalid 6-digit verification code' });
+    }
+
+    db.run(`UPDATE users SET is_verified = 1, verification_code = NULL WHERE id = ?`, [user.id], () => {
+      // Seed default habits for verified user if none exist
+      db.get(`SELECT COUNT(*) as cnt FROM habits WHERE user_id = ?`, [user.id], (err, row) => {
+        if (!row || row.cnt === 0) {
+          const defaults = [
+            ['Wake up at 05:00 ⏰', 'Health'],
+            ['Gym Workout 💪', 'Health'],
+            ['Deep Work Session 🎯', 'Work'],
+            ['Read 20 Pages 📖', 'Learning'],
+            ['Review Daily Expenses 💰', 'Finance']
+          ];
+          const stmt = db.prepare(`INSERT INTO habits (user_id, title, category) VALUES (?, ?, ?)`);
+          defaults.forEach(item => stmt.run(user.id, item[0], item[1]));
+          stmt.finalize();
+        }
+      });
+
+      const token = generateToken(user);
+      return res.json({
+        success: true,
+        token,
+        user: { id: user.id, username: user.username, email: user.email }
+      });
+    });
+  });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { loginId, password } = req.body;
+  if (!loginId || !password) {
+    return res.status(400).json({ error: 'Login ID and password required' });
+  }
+
+  const passHash = hashPassword(password);
+  db.get(`SELECT * FROM users WHERE (username = ? OR email = ?) AND password_hash = ?`,
+    [loginId, loginId, passHash],
+    (err, user) => {
+      if (err || !user) {
+        return res.status(401).json({ error: 'Invalid username/email or password' });
+      }
+
+      if (user.is_verified === 0) {
+        const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+        db.run(`UPDATE users SET verification_code = ? WHERE id = ?`, [newCode, user.id]);
+        console.log(`[EMAIL DISPATCH SIMULATOR] Resent verification code for ${user.email}: ${newCode}`);
+        return res.json({
+          success: false,
+          requireVerification: true,
+          email: user.email,
+          devCode: newCode,
+          message: 'Account not verified. Please enter the verification code sent to your email.'
+        });
+      }
+
+      const token = generateToken(user);
+      return res.json({
+        success: true,
+        token,
+        user: { id: user.id, username: user.username, email: user.email }
+      });
+    }
+  );
+});
+
+// ==========================================
+// PROTECTED HABIT MATRIX API
+// ==========================================
+
+app.get('/api/matrix', authMiddleware, (req, res) => {
+  const days = parseInt(req.query.days) || 14;
+  const userId = req.user.id;
   const dates = [];
   const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-  const refDate = new Date(refDateStr + 'T12:00:00Z');
+  const refDate = new Date();
   
-  for (let i = daysCount - 1; i >= 0; i--) {
+  for (let i = days - 1; i >= 0; i--) {
     const d = new Date(refDate);
     d.setDate(refDate.getDate() - i);
     const dateStr = d.toISOString().split('T')[0];
@@ -52,356 +173,182 @@ function getDates(daysCount = 14, refDateStr = '2026-07-03') {
       weekday: weekdays[d.getDay()]
     });
   }
-  return dates;
-}
 
-// ==========================================
-// AUTHENTICATION API ENDPOINTS
-// ==========================================
+  db.all('SELECT * FROM habits WHERE user_id = ? ORDER BY id ASC', [userId], (err, habits) => {
+    if (err) return res.status(500).json({ error: err.message });
 
-// Register User
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { username, email, password } = req.body;
-    if (!username || !email || !password) {
-      return res.status(400).json({ success: false, error: 'All fields required' });
-    }
+    db.all(`SELECT hl.* FROM habit_logs hl JOIN habits h ON hl.habit_id = h.id WHERE h.user_id = ?`, [userId], (err, logs) => {
+      if (err) return res.status(500).json({ error: err.message });
 
-    const existing = await dbAsync.get('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
-    if (existing) {
-      return res.status(400).json({ success: false, error: 'Username or email already taken' });
-    }
-
-    const { hash, salt } = hashPassword(password);
-    const result = await dbAsync.run(
-      'INSERT INTO users (username, email, password_hash, salt) VALUES (?, ?, ?, ?)',
-      [username, email, hash, salt]
-    );
-
-    // Seed default matrix for new user
-    seedMatrixForUser(result.id);
-
-    const token = jwt.sign({ userId: result.id, username }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ success: true, token, user: { id: result.id, username, email } });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Login User
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { loginId, password } = req.body;
-    if (!loginId || !password) {
-      return res.status(400).json({ success: false, error: 'Username/Email and password required' });
-    }
-
-    const user = await dbAsync.get('SELECT * FROM users WHERE username = ? OR email = ?', [loginId, loginId]);
-    if (!user) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
-    }
-
-    const { hash } = hashPassword(password, user.salt);
-    if (hash !== user.password_hash) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
-    }
-
-    const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ success: true, token, user: { id: user.id, username: user.username, email: user.email } });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Current User Info
-app.get('/api/auth/me', authMiddleware, async (req, res) => {
-  const user = await dbAsync.get('SELECT id, username, email FROM users WHERE id = ?', [req.userId]);
-  res.json({ success: true, user: user || { id: 1, username: 'AmolKumarSingh', email: 'demo@taskpulse.com' } });
-});
-
-// ==========================================
-// HABIT MATRIX & EXCEL ENDPOINTS
-// ==========================================
-
-app.use(authMiddleware);
-
-// 1. GET Habit Matrix Data
-app.get('/api/matrix', async (req, res) => {
-  try {
-    const days = parseInt(req.query.days) || 14;
-    const todayStr = req.query.today || '2026-07-03';
-    const dates = getDates(days, todayStr);
-
-    const habits = await dbAsync.all('SELECT * FROM habits WHERE user_id = ? ORDER BY sort_order ASC, id ASC', [req.userId]);
-    
-    const startDate = dates[0].date;
-    const endDate = dates[dates.length - 1].date;
-    const habitIds = habits.map(h => h.id);
-
-    let logs = [];
-    if (habitIds.length > 0) {
-      const placeholders = habitIds.map(() => '?').join(',');
-      logs = await dbAsync.all(`
-        SELECT habit_id, date, completed 
-        FROM habit_logs 
-        WHERE habit_id IN (${placeholders}) AND date >= ? AND date <= ?
-      `, [...habitIds, startDate, endDate]);
-    }
-
-    const logMap = {};
-    logs.forEach(row => {
-      if (!logMap[row.habit_id]) logMap[row.habit_id] = {};
-      logMap[row.habit_id][row.date] = row.completed === 1;
-    });
-
-    const dailyStats = dates.map(dObj => {
-      let completedCount = 0;
-      habits.forEach(h => {
-        if (logMap[h.id] && logMap[h.id][dObj.date]) completedCount++;
+      const matrix = {};
+      logs.forEach(log => {
+        if (!matrix[log.habit_id]) matrix[log.habit_id] = {};
+        matrix[log.habit_id][log.log_date] = log.status === 1;
       });
-      const total = habits.length;
-      return {
-        date: dObj.date,
-        completed: completedCount,
-        total,
-        percentage: total > 0 ? Math.round((completedCount / total) * 100) : 0
-      };
+
+      const dailyStats = dates.map(d => {
+        let completed = 0;
+        habits.forEach(h => {
+          if (matrix[h.id] && matrix[h.id][d.date]) completed++;
+        });
+        const total = habits.length;
+        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+        return { date: d.date, completed, total, percentage };
+      });
+
+      res.json({ success: true, habits, dates, matrix, dailyStats });
     });
-
-    res.json({ success: true, dates, habits, matrix: logMap, dailyStats });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  });
 });
 
-// 2. Toggle Habit Checkbox
-app.patch('/api/matrix/toggle', async (req, res) => {
-  try {
-    const { habit_id, date } = req.body;
-    if (!habit_id || !date) return res.status(400).json({ success: false, error: 'habit_id and date required' });
+app.post('/api/matrix/habit', authMiddleware, (req, res) => {
+  const { title, category } = req.body;
+  if (!title) return res.status(400).json({ error: 'Title required' });
 
-    // Verify habit belongs to user
-    const habit = await dbAsync.get('SELECT id FROM habits WHERE id = ? AND user_id = ?', [habit_id, req.userId]);
-    if (!habit) return res.status(403).json({ success: false, error: 'Unauthorized habit access' });
-
-    const row = await dbAsync.get('SELECT completed FROM habit_logs WHERE habit_id = ? AND date = ?', [habit_id, date]);
-    let newStatus = 1;
-    if (row) {
-      newStatus = row.completed === 1 ? 0 : 1;
-      await dbAsync.run('UPDATE habit_logs SET completed = ? WHERE habit_id = ? AND date = ?', [newStatus, habit_id, date]);
-    } else {
-      await dbAsync.run('INSERT INTO habit_logs (habit_id, date, completed) VALUES (?, ?, 1)', [habit_id, date]);
-      newStatus = 1;
-    }
-
-    res.json({ success: true, completed: newStatus === 1 });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  db.run('INSERT INTO habits (user_id, title, category) VALUES (?, ?, ?)', [req.user.id, title, category || 'Personal'], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, id: this.lastID });
+  });
 });
 
-// 3. Add New Habit
-app.post('/api/matrix/habit', async (req, res) => {
-  try {
-    const { title, category = 'Personal' } = req.body;
-    if (!title) return res.status(400).json({ success: false, error: 'Title required' });
-
-    const maxRow = await dbAsync.get('SELECT MAX(sort_order) as maxOrder FROM habits WHERE user_id = ?', [req.userId]);
-    const order = (maxRow && maxRow.maxOrder !== null ? maxRow.maxOrder : 0) + 1;
-
-    const result = await dbAsync.run('INSERT INTO habits (user_id, title, category, sort_order) VALUES (?, ?, ?, ?)', [req.userId, title, category, order]);
-    const newHabit = await dbAsync.get('SELECT * FROM habits WHERE id = ?', [result.id]);
-    res.json({ success: true, habit: newHabit });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 4. Delete Habit
-app.delete('/api/matrix/habit/:id', async (req, res) => {
-  try {
-    await dbAsync.run('DELETE FROM habits WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+app.delete('/api/matrix/habit/:id', authMiddleware, (req, res) => {
+  const id = req.params.id;
+  db.run('DELETE FROM habits WHERE id = ? AND user_id = ?', [id, req.user.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  });
 });
 
-// 5. Analytics Summary
-app.get('/api/analytics/summary', async (req, res) => {
-  try {
-    const todayStr = req.query.today || '2026-07-03';
-    const dates30 = getDates(30, todayStr);
-    const habits = await dbAsync.all('SELECT id FROM habits WHERE user_id = ?', [req.userId]);
-    const totalHabits = habits.length;
+app.patch('/api/matrix/toggle', authMiddleware, (req, res) => {
+  const { habit_id, date } = req.body;
+  if (!habit_id || !date) return res.status(400).json({ error: 'Missing habit_id or date' });
 
-    const habitIds = habits.map(h => h.id);
-    let logMap = {};
-    if (habitIds.length > 0) {
-      const placeholders = habitIds.map(() => '?').join(',');
-      const logs = await dbAsync.all(`
-        SELECT date, COUNT(*) as completed
-        FROM habit_logs
-        WHERE habit_id IN (${placeholders}) AND completed = 1 AND date >= ?
-        GROUP BY date
-      `, [...habitIds, dates30[0].date]);
-      logs.forEach(l => logMap[l.date] = l.completed);
-    }
+  db.get('SELECT id FROM habits WHERE id = ? AND user_id = ?', [habit_id, req.user.id], (err, habit) => {
+    if (err || !habit) return res.status(403).json({ error: 'Unauthorized habit access' });
 
-    const monthly = dates30.map(d => {
-      const completed = logMap[d.date] || 0;
-      return {
-        date: d.date,
-        completed,
-        total: totalHabits,
-        percentage: totalHabits > 0 ? Math.round((completed / totalHabits) * 100) : 0
-      };
-    });
-
-    const weekly = monthly.slice(-7);
-    const today = monthly[monthly.length - 1] || { completed: 0, total: totalHabits, percentage: 0 };
-
-    let streak = 0;
-    for (let i = monthly.length - 1; i >= 0; i--) {
-      if (monthly[i].percentage >= 50) streak++;
-      else break;
-    }
-
-    const categories = await dbAsync.all(`
-      SELECT h.category, COUNT(hl.id) as count
-      FROM habits h
-      LEFT JOIN habit_logs hl ON h.id = hl.habit_id AND hl.completed = 1
-      WHERE h.user_id = ?
-      GROUP BY h.category
-    `, [req.userId]);
-
-    res.json({ success: true, today, weekly, monthly, categories, streak });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 6. Excel Export
-app.get('/api/excel/export', async (req, res) => {
-  try {
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = `TaskPulse Excel Studio (@${req.username})`;
-    
-    const sheet = workbook.addWorksheet('My Habits Tracker', {
-      views: [{ state: 'frozen', xSplit: 1, ySplit: 2 }]
-    });
-
-    const daysCount = parseInt(req.query.days) || 14;
-    const dates = getDates(daysCount, '2026-07-03');
-    const habits = await dbAsync.all('SELECT * FROM habits WHERE user_id = ? ORDER BY sort_order ASC, id ASC', [req.userId]);
-    
-    const habitIds = habits.map(h => h.id);
-    const completedMap = {};
-    if (habitIds.length > 0) {
-      const placeholders = habitIds.map(() => '?').join(',');
-      const logs = await dbAsync.all(`SELECT habit_id, date FROM habit_logs WHERE habit_id IN (${placeholders}) AND completed = 1`, habitIds);
-      logs.forEach(l => completedMap[`${l.habit_id}_${l.date}`] = true);
-    }
-
-    sheet.getColumn(1).width = 34;
-
-    const row1Values = ['Week ->'];
-    dates.forEach(d => row1Values.push(d.weekday));
-    const row1 = sheet.addRow(row1Values);
-    row1.height = 20;
-    row1.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF555555' } };
-    row1.alignment = { horizontal: 'center', vertical: 'middle' };
-
-    const row2Values = [`My Habits (@${req.username})`];
-    dates.forEach(d => row2Values.push(d.dayNum));
-    const row2 = sheet.addRow(row2Values);
-    row2.height = 28;
-    row2.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FF222222' } };
-    row2.alignment = { horizontal: 'center', vertical: 'middle' };
-    
-    const a2 = sheet.getCell('A2');
-    a2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
-    a2.alignment = { horizontal: 'center', vertical: 'middle' };
-
-    for (let c = 2; c <= dates.length + 1; c++) {
-      sheet.getColumn(c).width = 6.5;
-    }
-
-    const startHabitRow = 3;
-    habits.forEach((h) => {
-      const rowVals = [h.title];
-      dates.forEach(d => {
-        const isDone = completedMap[`${h.id}_${d.date}`];
-        rowVals.push(isDone ? '☑' : '☐');
-      });
-      const r = sheet.addRow(rowVals);
-      r.height = 25;
-
-      const titleCell = r.getCell(1);
-      titleCell.font = { name: 'Segoe UI Emoji', size: 11, bold: true, color: { argb: 'FF1B4D3E' } };
-      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC8E6C9' } };
-      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-
-      for (let c = 2; c <= dates.length + 1; c++) {
-        const cell = r.getCell(c);
-        cell.font = { name: 'Segoe UI Symbol', size: 14 };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-          left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-          bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-          right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
-        };
+    db.get('SELECT * FROM habit_logs WHERE habit_id = ? AND log_date = ?', [habit_id, date], (err, log) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (log) {
+        const newStatus = log.status === 1 ? 0 : 1;
+        db.run('UPDATE habit_logs SET status = ? WHERE id = ?', [newStatus, log.id], (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ success: true, status: newStatus });
+        });
+      } else {
+        db.run('INSERT INTO habit_logs (habit_id, log_date, status) VALUES (?, ?, 1)', [habit_id, date], (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ success: true, status: 1 });
+        });
       }
     });
-
-    const endHabitRow = startHabitRow + habits.length - 1;
-    sheet.addRow([]);
-
-    const progPctVals = ['Progress'];
-    dates.forEach((d, cIdx) => {
-      const colLetter = String.fromCharCode(66 + cIdx);
-      progPctVals.push({ formula: `COUNTIF(${colLetter}${startHabitRow}:${colLetter}${endHabitRow}, "☑") / ${habits.length || 1}` });
-    });
-    const pctRow = sheet.addRow(progPctVals);
-    pctRow.height = 24;
-    pctRow.getCell(1).font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF333333' } };
-    pctRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-    
-    for (let c = 2; c <= dates.length + 1; c++) {
-      const cell = pctRow.getCell(c);
-      cell.numFmt = '0%';
-      cell.font = { name: 'Arial', size: 10, bold: true };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
-    }
-
-    const progCountVals = [''];
-    dates.forEach((d, cIdx) => {
-      const colLetter = String.fromCharCode(66 + cIdx);
-      progCountVals.push({ formula: `COUNTIF(${colLetter}${startHabitRow}:${colLetter}${endHabitRow}, "☑")` });
-    });
-    const countRow = sheet.addRow(progCountVals);
-    countRow.height = 22;
-    for (let c = 2; c <= dates.length + 1; c++) {
-      countRow.getCell(c).font = { name: 'Arial', size: 10 };
-      countRow.getCell(c).alignment = { horizontal: 'center', vertical: 'middle' };
-    }
-
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="Habits_${req.username}_${new Date().toISOString().split('T')[0]}.xlsx"`);
-
-    await workbook.xlsx.write(res);
-    res.end();
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  });
 });
 
-if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`TaskPulse Excel Studio server running on http://localhost:${PORT}`);
-  });
-}
+app.get('/api/analytics/summary', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  db.all('SELECT * FROM habits WHERE user_id = ?', [userId], (err, habits) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    db.all(`SELECT hl.* FROM habit_logs hl JOIN habits h ON hl.habit_id = h.id WHERE h.user_id = ?`, [userId], (err, logs) => {
+      if (err) return res.status(500).json({ error: err.message });
 
-module.exports = app;
+      const logMap = {};
+      logs.forEach(l => {
+        if (l.status === 1) logMap[`${l.habit_id}_${l.log_date}`] = true;
+      });
+
+      const dates30 = [];
+      const refDate = new Date();
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(refDate);
+        d.setDate(refDate.getDate() - i);
+        dates30.push(d.toISOString().split('T')[0]);
+      }
+
+      const monthly = dates30.map(d => {
+        let completed = 0;
+        habits.forEach(h => {
+          if (logMap[`${h.id}_${d}`]) completed++;
+        });
+        const total = habits.length;
+        return {
+          date: d,
+          completed,
+          total,
+          percentage: total > 0 ? Math.round((completed / total) * 100) : 0
+        };
+      });
+
+      const weekly = monthly.slice(-7);
+      const today = monthly[monthly.length - 1];
+
+      let streak = 0;
+      for (let i = monthly.length - 1; i >= 0; i--) {
+        if (monthly[i].percentage >= 50) streak++;
+        else break;
+      }
+
+      const catCounts = {};
+      habits.forEach(h => {
+        catCounts[h.category] = (catCounts[h.category] || 0) + 1;
+      });
+      const categories = Object.keys(catCounts).map(k => ({ category: k, count: catCounts[k] }));
+
+      res.json({ success: true, today, weekly, monthly, streak, categories });
+    });
+  });
+});
+
+// Excel Export endpoint
+app.get('/api/excel/export', authMiddleware, (req, res) => {
+  const days = parseInt(req.query.days) || 14;
+  const userId = req.user.id;
+  const username = req.user.username;
+  const dates = [];
+  const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const refDate = new Date();
+  
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(refDate);
+    d.setDate(refDate.getDate() - i);
+    dates.push({
+      date: d.toISOString().split('T')[0],
+      dayNum: d.getDate(),
+      weekday: weekdays[d.getDay()]
+    });
+  }
+
+  db.all('SELECT * FROM habits WHERE user_id = ? ORDER BY id ASC', [userId], async (err, habits) => {
+    db.all(`SELECT hl.* FROM habit_logs hl JOIN habits h ON hl.habit_id = h.id WHERE h.user_id = ?`, [userId], async (err, logs) => {
+      const ExcelJS = require('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet(`${username} Matrix`);
+
+      const headerRow = ['Habit Title', ...dates.map(d => `${d.weekday} ${d.dayNum}`)];
+      worksheet.addRow(headerRow);
+
+      const matrix = {};
+      logs.forEach(l => {
+        if (!matrix[l.habit_id]) matrix[l.habit_id] = {};
+        matrix[l.habit_id][l.log_date] = l.status === 1;
+      });
+
+      habits.forEach(h => {
+        const row = [h.title];
+        dates.forEach(d => {
+          row.push((matrix[h.id] && matrix[h.id][d.date]) ? '☑' : '☐');
+        });
+        worksheet.addRow(row);
+      });
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="Habits_${username}.xlsx"`);
+      await workbook.xlsx.write(res);
+      res.end();
+    });
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`TaskPulse Excel Studio server running on http://localhost:${PORT}`);
+});

@@ -5,6 +5,7 @@ let categoryDonutChart = null;
 
 let currentDaysView = 14;
 let currentAuthTab = 'login';
+let pendingVerificationEmail = '';
 let deferredPrompt = null;
 const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:';
 
@@ -71,19 +72,26 @@ document.addEventListener('DOMContentLoaded', () => {
     btnExport.addEventListener('click', triggerExcelExport);
   }
 
+  // Auth Form Handler
   const authForm = document.getElementById('form-auth');
   if (authForm) {
     authForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const emailOrUsername = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value.trim();
       const username = document.getElementById('auth-username').value.trim() || emailOrUsername.split('@')[0];
 
       if (isStaticHost) {
+        if (currentAuthTab === 'register') {
+          pendingVerificationEmail = emailOrUsername;
+          showVerificationScreen('889900');
+          return;
+        }
         localStorage.setItem('taskpulse_token', 'offline-static-token');
-        localStorage.setItem('taskpulse_user', username || 'AmolKumarSingh');
+        localStorage.setItem('taskpulse_user', username);
         document.getElementById('auth-modal').style.display = 'none';
         updateUserBadge();
-        showToast(`Welcome to Standalone GitHub Pages Matrix, @${username}!`, 'emerald');
+        showToast(`Welcome to Standalone Matrix, @${username}!`, 'emerald');
         loadMatrix();
         loadAnalytics();
         return;
@@ -91,8 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const endpoint = currentAuthTab === 'login' ? '/api/auth/login' : '/api/auth/register';
       const body = currentAuthTab === 'login' 
-        ? { loginId: emailOrUsername, password: 'password123' }
-        : { username, email: emailOrUsername, password: 'password123' };
+        ? { loginId: emailOrUsername, password }
+        : { username, email: emailOrUsername, password };
 
       try {
         const res = await fetch(endpoint, {
@@ -101,26 +109,79 @@ document.addEventListener('DOMContentLoaded', () => {
           body: JSON.stringify(body)
         });
         const data = await res.json();
+
+        if (data.requireVerification) {
+          pendingVerificationEmail = data.email || emailOrUsername;
+          showVerificationScreen(data.devCode || '889900');
+          return;
+        }
+
         if (data.success) {
           localStorage.setItem('taskpulse_token', data.token);
           localStorage.setItem('taskpulse_user', data.user.username);
           document.getElementById('auth-modal').style.display = 'none';
           updateUserBadge();
-          showToast(`Welcome to your Habit Matrix, @${data.user.username}!`, 'emerald');
+          showToast(`Welcome back, @${data.user.username}!`, 'emerald');
           loadMatrix();
           loadAnalytics();
         } else {
           showToast(data.error || 'Authentication failed', 'rose');
         }
       } catch (err) {
-        // Fallback for static hosting
+        if (currentAuthTab === 'register') {
+          pendingVerificationEmail = emailOrUsername;
+          showVerificationScreen('889900');
+        } else {
+          localStorage.setItem('taskpulse_token', 'offline-static-token');
+          localStorage.setItem('taskpulse_user', username);
+          document.getElementById('auth-modal').style.display = 'none';
+          updateUserBadge();
+          showToast(`Running in Standalone Mode! Welcome @${username}!`, 'cyan');
+          loadMatrix();
+          loadAnalytics();
+        }
+      }
+    });
+  }
+
+  // Email Verification Code Form
+  const verifyForm = document.getElementById('form-verify-email');
+  if (verifyForm) {
+    verifyForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = document.getElementById('verify-code-input').value.trim();
+
+      if (isStaticHost) {
         localStorage.setItem('taskpulse_token', 'offline-static-token');
-        localStorage.setItem('taskpulse_user', username || 'AmolKumarSingh');
+        localStorage.setItem('taskpulse_user', pendingVerificationEmail.split('@')[0] || 'User');
         document.getElementById('auth-modal').style.display = 'none';
         updateUserBadge();
-        showToast(`Running in Standalone Mode! Welcome @${username}!`, 'cyan');
+        showToast('Email Verified! Welcome to Habit Matrix Studio!', 'emerald');
         loadMatrix();
         loadAnalytics();
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/verify-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: pendingVerificationEmail, code })
+        });
+        const data = await res.json();
+        if (data.success) {
+          localStorage.setItem('taskpulse_token', data.token);
+          localStorage.setItem('taskpulse_user', data.user.username);
+          document.getElementById('auth-modal').style.display = 'none';
+          updateUserBadge();
+          showToast('🎉 Email Verified! Welcome to your Habit Matrix!', 'emerald');
+          loadMatrix();
+          loadAnalytics();
+        } else {
+          showToast(data.error || 'Invalid verification code', 'rose');
+        }
+      } catch (err) {
+        showToast('Connection error during verification', 'rose');
       }
     });
   }
@@ -128,17 +189,21 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuth();
 });
 
-// Standalone Static Storage Helper for GitHub Pages
+function showVerificationScreen(sampleCode) {
+  document.getElementById('auth-main-view').style.display = 'none';
+  document.getElementById('verify-email-view').style.display = 'block';
+  showToast(`Verification code dispatched to ${pendingVerificationEmail} (Simulated Code: ${sampleCode})`, 'cyan');
+}
+
 function getLocalHabits() {
   const saved = localStorage.getItem('taskpulse_habits');
   if (saved) return JSON.parse(saved);
   const defaults = [
     { id: 1, title: 'Wake up at 05:00 ⏰', category: 'Health' },
     { id: 2, title: 'Gym 💪', category: 'Health' },
-    { id: 3, title: 'Stop Watching Porn 🌊', category: 'Personal' },
+    { id: 3, title: 'Deep Work Session 🎯', category: 'Work' },
     { id: 4, title: 'Reading / Learning 📖', category: 'Learning' },
-    { id: 5, title: 'Budget Tracking 💰', category: 'Finance' },
-    { id: 6, title: 'Project Work 🎯', category: 'Work' }
+    { id: 5, title: 'Budget Tracking 💰', category: 'Finance' }
   ];
   localStorage.setItem('taskpulse_habits', JSON.stringify(defaults));
   return defaults;
@@ -225,7 +290,7 @@ function openAddHabitModal() {
 function openProfileModal() {
   const modal = document.getElementById('modal-profile');
   if (modal) {
-    const username = localStorage.getItem('taskpulse_user') || 'AmolKumarSingh';
+    const username = localStorage.getItem('taskpulse_user') || 'User';
     document.getElementById('profile-modal-name').textContent = `@${username}`;
     const elStreak = document.getElementById('stat-streak');
     document.getElementById('profile-streak-val').textContent = elStreak ? elStreak.textContent : '0 Days';
@@ -242,7 +307,6 @@ async function triggerExcelExport() {
   showToast('Generating personalized Excel (.xlsx) Report...', 'cyan');
   
   if (isStaticHost || typeof XLSX !== 'undefined') {
-    // Generate standalone Excel using SheetJS
     const habits = getLocalHabits();
     const logs = getLocalLogs();
     const dates = getDatesList(currentDaysView);
@@ -263,7 +327,7 @@ async function triggerExcelExport() {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       XLSX.utils.book_append_sheet(wb, ws, 'My Habits Matrix');
-      XLSX.writeFile(wb, `Habits_${localStorage.getItem('taskpulse_user') || 'Amol'}.xlsx`);
+      XLSX.writeFile(wb, `Habits_${localStorage.getItem('taskpulse_user') || 'User'}.xlsx`);
       return;
     }
   }
@@ -278,7 +342,7 @@ async function triggerExcelExport() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Habits_${localStorage.getItem('taskpulse_user') || 'AmolKumarSingh'}.xlsx`;
+      a.download = `Habits_${localStorage.getItem('taskpulse_user') || 'User'}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -316,24 +380,20 @@ function switchAuthTab(tab) {
   document.getElementById('tab-register').classList.toggle('active', tab === 'register');
   document.getElementById('field-username').style.display = tab === 'register' ? 'block' : 'none';
   document.getElementById('label-email').textContent = tab === 'register' ? 'Email Address' : 'Email or Username';
-  document.getElementById('btn-auth-submit').textContent = tab === 'register' ? 'Create My Account & Matrix' : 'Sign In to Matrix';
-}
-
-async function loginAsDemo() {
-  document.getElementById('auth-email').value = 'demo@taskpulse.com';
-  document.getElementById('auth-password').value = 'password123';
-  document.getElementById('btn-auth-submit').click();
+  document.getElementById('btn-auth-submit').textContent = tab === 'register' ? 'Send Verification Code' : 'Sign In to Matrix';
 }
 
 function updateUserBadge() {
   const badge = document.getElementById('user-display-name');
-  const username = localStorage.getItem('taskpulse_user') || 'AmolKumarSingh';
+  const username = localStorage.getItem('taskpulse_user') || 'User';
   if (badge) badge.textContent = `@${username}`;
 }
 
 function logoutUser() {
   localStorage.removeItem('taskpulse_token');
   localStorage.removeItem('taskpulse_user');
+  document.getElementById('auth-main-view').style.display = 'block';
+  document.getElementById('verify-email-view').style.display = 'none';
   document.getElementById('auth-modal').style.display = 'flex';
   showToast('Signed out successfully', 'cyan');
 }
@@ -341,7 +401,7 @@ function logoutUser() {
 function getDatesList(daysCount = 14) {
   const dates = [];
   const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-  const refDate = new Date('2026-07-03T12:00:00Z');
+  const refDate = new Date();
   
   for (let i = daysCount - 1; i >= 0; i--) {
     const d = new Date(refDate);
@@ -393,7 +453,7 @@ function renderMatrixUI(habits, dates, logMap) {
   const tfoot = document.getElementById('matrix-tfoot');
 
   let headHtml = `<tr>
-    <th class="habit-header" style="min-width: 220px;">My Habits (@${localStorage.getItem('taskpulse_user') || 'Amol'})</th>`;
+    <th class="habit-header" style="min-width: 220px;">My Habits (@${localStorage.getItem('taskpulse_user') || 'User'})</th>`;
   
   dates.forEach(d => {
     headHtml += `
