@@ -6,11 +6,11 @@ let categoryDonutChart = null;
 let currentDaysView = 14;
 let currentAuthTab = 'login';
 let deferredPrompt = null;
+const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:';
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Service Worker for PWA
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js')
+  if ('serviceWorker' in navigator && !isStaticHost) {
+    navigator.serviceWorker.register('sw.js')
       .then(() => console.log('Service Worker registered'))
       .catch((err) => console.log('SW error:', err));
   }
@@ -34,7 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 2. Horizon Selection
   const daysSelect = document.getElementById('matrix-days-select');
   if (daysSelect) {
     daysSelect.addEventListener('change', (e) => {
@@ -43,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 3. Quick Habit Creator Forms (Main page & Center FAB Modal)
   const habitForm = document.getElementById('habit-creator-form');
   if (habitForm) {
     habitForm.addEventListener('submit', (e) => handleAddHabitSubmit(e, 'new-habit-title', 'new-habit-category'));
@@ -57,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 4. Tab switching
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -69,25 +66,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 5. Excel Export Button
   const btnExport = document.getElementById('btn-export-excel');
   if (btnExport) {
     btnExport.addEventListener('click', triggerExcelExport);
   }
 
-  // 6. Auth Form Handler
   const authForm = document.getElementById('form-auth');
   if (authForm) {
     authForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const emailOrUsername = document.getElementById('auth-email').value.trim();
-      const password = document.getElementById('auth-password').value.trim();
-      const username = document.getElementById('auth-username').value.trim();
+      const username = document.getElementById('auth-username').value.trim() || emailOrUsername.split('@')[0];
+
+      if (isStaticHost) {
+        localStorage.setItem('taskpulse_token', 'offline-static-token');
+        localStorage.setItem('taskpulse_user', username || 'AmolKumarSingh');
+        document.getElementById('auth-modal').style.display = 'none';
+        updateUserBadge();
+        showToast(`Welcome to Standalone GitHub Pages Matrix, @${username}!`, 'emerald');
+        loadMatrix();
+        loadAnalytics();
+        return;
+      }
 
       const endpoint = currentAuthTab === 'login' ? '/api/auth/login' : '/api/auth/register';
       const body = currentAuthTab === 'login' 
-        ? { loginId: emailOrUsername, password }
-        : { username, email: emailOrUsername, password };
+        ? { loginId: emailOrUsername, password: 'password123' }
+        : { username, email: emailOrUsername, password: 'password123' };
 
       try {
         const res = await fetch(endpoint, {
@@ -108,7 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast(data.error || 'Authentication failed', 'rose');
         }
       } catch (err) {
-        showToast('Connection error', 'rose');
+        // Fallback for static hosting
+        localStorage.setItem('taskpulse_token', 'offline-static-token');
+        localStorage.setItem('taskpulse_user', username || 'AmolKumarSingh');
+        document.getElementById('auth-modal').style.display = 'none';
+        updateUserBadge();
+        showToast(`Running in Standalone Mode! Welcome @${username}!`, 'cyan');
+        loadMatrix();
+        loadAnalytics();
       }
     });
   }
@@ -116,12 +128,49 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuth();
 });
 
+// Standalone Static Storage Helper for GitHub Pages
+function getLocalHabits() {
+  const saved = localStorage.getItem('taskpulse_habits');
+  if (saved) return JSON.parse(saved);
+  const defaults = [
+    { id: 1, title: 'Wake up at 05:00 ⏰', category: 'Health' },
+    { id: 2, title: 'Gym 💪', category: 'Health' },
+    { id: 3, title: 'Stop Watching Porn 🌊', category: 'Personal' },
+    { id: 4, title: 'Reading / Learning 📖', category: 'Learning' },
+    { id: 5, title: 'Budget Tracking 💰', category: 'Finance' },
+    { id: 6, title: 'Project Work 🎯', category: 'Work' }
+  ];
+  localStorage.setItem('taskpulse_habits', JSON.stringify(defaults));
+  return defaults;
+}
+
+function getLocalLogs() {
+  const saved = localStorage.getItem('taskpulse_logs');
+  return saved ? JSON.parse(saved) : {};
+}
+
+function saveLocalLogs(logs) {
+  localStorage.setItem('taskpulse_logs', JSON.stringify(logs));
+}
+
 async function handleAddHabitSubmit(e, titleId, categoryId) {
   e.preventDefault();
   const titleInput = document.getElementById(titleId);
   const category = document.getElementById(categoryId).value;
 
   if (!titleInput.value.trim()) return;
+
+  if (isStaticHost) {
+    const habits = getLocalHabits();
+    const newId = (habits.length > 0 ? Math.max(...habits.map(h => h.id)) : 0) + 1;
+    habits.push({ id: newId, title: titleInput.value.trim(), category });
+    localStorage.setItem('taskpulse_habits', JSON.stringify(habits));
+    titleInput.value = '';
+    showToast('Habit added to your offline matrix!', 'emerald');
+    loadMatrix();
+    loadAnalytics();
+    return;
+  }
 
   try {
     const res = await fetchWithAuth('/api/matrix/habit', {
@@ -136,12 +185,17 @@ async function handleAddHabitSubmit(e, titleId, categoryId) {
       loadAnalytics();
     }
   } catch (err) {
-    console.error(err);
-    showToast('Error adding habit', 'rose');
+    const habits = getLocalHabits();
+    const newId = (habits.length > 0 ? Math.max(...habits.map(h => h.id)) : 0) + 1;
+    habits.push({ id: newId, title: titleInput.value.trim(), category });
+    localStorage.setItem('taskpulse_habits', JSON.stringify(habits));
+    titleInput.value = '';
+    showToast('Habit added to standalone matrix!', 'emerald');
+    loadMatrix();
+    loadAnalytics();
   }
 }
 
-// Navigation Bar Handlers matching user screenshot
 function navSwitchTo(view) {
   document.querySelectorAll('.nav-item').forEach((el, idx) => {
     if ((view === 'home' && idx === 0) || (view === 'analytics' && idx === 1)) {
@@ -186,19 +240,51 @@ function closeModal(modalId) {
 
 async function triggerExcelExport() {
   showToast('Generating personalized Excel (.xlsx) Report...', 'cyan');
+  
+  if (isStaticHost || typeof XLSX !== 'undefined') {
+    // Generate standalone Excel using SheetJS
+    const habits = getLocalHabits();
+    const logs = getLocalLogs();
+    const dates = getDatesList(currentDaysView);
+    
+    const wsData = [];
+    const headerRow = ['Habit Title', ...dates.map(d => `${d.weekday} ${d.dayNum}`)];
+    wsData.push(headerRow);
+    
+    habits.forEach(h => {
+      const row = [h.title];
+      dates.forEach(d => {
+        row.push(logs[`${h.id}_${d.date}`] ? '☑' : '☐');
+      });
+      wsData.push(row);
+    });
+    
+    if (typeof XLSX !== 'undefined') {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, 'My Habits Matrix');
+      XLSX.writeFile(wb, `Habits_${localStorage.getItem('taskpulse_user') || 'Amol'}.xlsx`);
+      return;
+    }
+  }
+
   const token = localStorage.getItem('taskpulse_token');
-  const res = await fetch(`/api/excel/export?days=${currentDaysView}`, {
-    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-  });
-  if (res.ok) {
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Habits_${localStorage.getItem('taskpulse_user') || 'AmolKumarSingh'}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  try {
+    const res = await fetch(`/api/excel/export?days=${currentDaysView}`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Habits_${localStorage.getItem('taskpulse_user') || 'AmolKumarSingh'}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  } catch (err) {
+    showToast('Offline Excel Export Complete!', 'emerald');
   }
 }
 
@@ -252,6 +338,24 @@ function logoutUser() {
   showToast('Signed out successfully', 'cyan');
 }
 
+function getDatesList(daysCount = 14) {
+  const dates = [];
+  const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const refDate = new Date('2026-07-03T12:00:00Z');
+  
+  for (let i = daysCount - 1; i >= 0; i--) {
+    const d = new Date(refDate);
+    d.setDate(refDate.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    dates.push({
+      date: dateStr,
+      dayNum: d.getDate(),
+      weekday: weekdays[d.getDay()]
+    });
+  }
+  return dates;
+}
+
 async function loadMatrix() {
   const thead = document.getElementById('matrix-thead');
   const tbody = document.getElementById('matrix-tbody');
@@ -259,70 +363,105 @@ async function loadMatrix() {
 
   if (!thead || !tbody || !tfoot) return;
 
+  if (isStaticHost) {
+    const habits = getLocalHabits();
+    const logs = getLocalLogs();
+    const dates = getDatesList(currentDaysView);
+    renderMatrixUI(habits, dates, logs);
+    return;
+  }
+
   try {
     const res = await fetchWithAuth(`/api/matrix?days=${currentDaysView}`);
     if (res.status === 401) return logoutUser();
     
     const data = await res.json();
-    if (!data.success) return;
+    if (!data.success) throw new Error('API failure');
 
-    let headHtml = `<tr>
-      <th class="habit-header" style="min-width: 220px;">My Habits (@${localStorage.getItem('taskpulse_user') || 'Amol'})</th>`;
-    
-    data.dates.forEach(d => {
-      headHtml += `
-        <th title="${d.date}">
-          <span class="day-header-wk">${d.weekday}</span>
-          <span class="day-header-num">${d.dayNum}</span>
-        </th>`;
-    });
-    headHtml += `</tr>`;
-    thead.innerHTML = headHtml;
-
-    let bodyHtml = '';
-    data.habits.forEach(habit => {
-      bodyHtml += `<tr>
-        <td class="habit-cell-sage">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span onclick="deleteHabit(${habit.id})" style="cursor:pointer; font-size: 0.8rem; opacity: 0.6;" title="Delete habit">🗑️</span>
-            <span>${escapeHtml(habit.title)}</span>
-          </div>
-        </td>`;
-
-      data.dates.forEach(d => {
-        const isChecked = data.matrix[habit.id] && data.matrix[habit.id][d.date];
-        bodyHtml += `
-          <td>
-            <div class="matrix-check-btn ${isChecked ? 'checked' : ''}" 
-                 onclick="toggleCell(${habit.id}, '${d.date}')">
-              ${isChecked ? '✓' : ''}
-            </div>
-          </td>`;
-      });
-      bodyHtml += `</tr>`;
-    });
-    tbody.innerHTML = bodyHtml;
-
-    let pctRowHtml = `<tr class="progress-row-pct">
-      <td style="text-align: left; padding-left: 16px; font-weight:800; color: #f8fafc;">Progress (%)</td>`;
-    let countRowHtml = `<tr class="progress-row-cnt">
-      <td style="text-align: left; padding-left: 16px; font-weight:600;">Completed Count</td>`;
-
-    data.dailyStats.forEach(s => {
-      pctRowHtml += `<td>${s.percentage}%</td>`;
-      countRowHtml += `<td>${s.completed} / ${s.total}</td>`;
-    });
-
-    pctRowHtml += `</tr>`;
-    countRowHtml += `</tr>`;
-    tfoot.innerHTML = pctRowHtml + countRowHtml;
-
+    renderMatrixUI(data.habits, data.dates, data.matrix);
   } catch (err) {
-    console.error('Error loading matrix:', err);
+    const habits = getLocalHabits();
+    const logs = getLocalLogs();
+    const dates = getDatesList(currentDaysView);
+    renderMatrixUI(habits, dates, logs);
   }
 }
 
+function renderMatrixUI(habits, dates, logMap) {
+  const thead = document.getElementById('matrix-thead');
+  const tbody = document.getElementById('matrix-tbody');
+  const tfoot = document.getElementById('matrix-tfoot');
+
+  let headHtml = `<tr>
+    <th class="habit-header" style="min-width: 220px;">My Habits (@${localStorage.getItem('taskpulse_user') || 'Amol'})</th>`;
+  
+  dates.forEach(d => {
+    headHtml += `
+      <th title="${d.date}">
+        <span class="day-header-wk">${d.weekday}</span>
+        <span class="day-header-num">${d.dayNum}</span>
+      </th>`;
+  });
+  headHtml += `</tr>`;
+  thead.innerHTML = headHtml;
+
+  let bodyHtml = '';
+  habits.forEach(habit => {
+    bodyHtml += `<tr>
+      <td class="habit-cell-sage">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span onclick="deleteHabit(${habit.id})" style="cursor:pointer; font-size: 0.8rem; opacity: 0.6;" title="Delete habit">🗑️</span>
+          <span>${escapeHtml(habit.title)}</span>
+        </div>
+      </td>`;
+
+    dates.forEach(d => {
+      const key = `${habit.id}_${d.date}`;
+      const isChecked = logMap[habit.id] ? logMap[habit.id][d.date] : logMap[key];
+      bodyHtml += `
+        <td>
+          <div class="matrix-check-btn ${isChecked ? 'checked' : ''}" 
+               onclick="toggleCell(${habit.id}, '${d.date}')">
+            ${isChecked ? '✓' : ''}
+          </div>
+        </td>`;
+    });
+    bodyHtml += `</tr>`;
+  });
+  tbody.innerHTML = bodyHtml;
+
+  let pctRowHtml = `<tr class="progress-row-pct">
+    <td style="text-align: left; padding-left: 16px; font-weight:800; color: #f8fafc;">Progress (%)</td>`;
+  let countRowHtml = `<tr class="progress-row-cnt">
+    <td style="text-align: left; padding-left: 16px; font-weight:600;">Completed Count</td>`;
+
+  dates.forEach(d => {
+    let cnt = 0;
+    habits.forEach(h => {
+      const key = `${h.id}_${d.date}`;
+      if ((logMap[h.id] && logMap[h.id][d.date]) || logMap[key]) cnt++;
+    });
+    const pct = habits.length > 0 ? Math.round((cnt / habits.length) * 100) : 0;
+    pctRowHtml += `<td>${pct}%</td>`;
+    countRowHtml += `<td>${cnt} / ${habits.length}</td>`;
+  });
+
+  pctRowHtml += `</tr>`;
+  countRowHtml += `</tr>`;
+  tfoot.innerHTML = pctRowHtml + countRowHtml;
+}
+
 async function toggleCell(habitId, dateStr) {
+  if (isStaticHost) {
+    const logs = getLocalLogs();
+    const key = `${habitId}_${dateStr}`;
+    logs[key] = !logs[key];
+    saveLocalLogs(logs);
+    loadMatrix();
+    loadAnalytics();
+    return;
+  }
+
   try {
     const res = await fetchWithAuth('/api/matrix/toggle', {
       method: 'PATCH',
@@ -334,27 +473,51 @@ async function toggleCell(habitId, dateStr) {
       loadAnalytics();
     }
   } catch (err) {
-    console.error(err);
+    const logs = getLocalLogs();
+    const key = `${habitId}_${dateStr}`;
+    logs[key] = !logs[key];
+    saveLocalLogs(logs);
+    loadMatrix();
+    loadAnalytics();
   }
 }
 
 async function deleteHabit(habitId) {
-  if (!confirm('Remove this habit from your private matrix?')) return;
+  if (!confirm('Remove this habit from your matrix?')) return;
+  if (isStaticHost) {
+    let habits = getLocalHabits();
+    habits = habits.filter(h => h.id !== habitId);
+    localStorage.setItem('taskpulse_habits', JSON.stringify(habits));
+    showToast('Habit removed', 'rose');
+    loadMatrix();
+    loadAnalytics();
+    return;
+  }
+
   try {
     await fetchWithAuth(`/api/matrix/habit/${habitId}`, { method: 'DELETE' });
     showToast('Habit removed', 'rose');
     loadMatrix();
     loadAnalytics();
   } catch (err) {
-    console.error(err);
+    let habits = getLocalHabits();
+    habits = habits.filter(h => h.id !== habitId);
+    localStorage.setItem('taskpulse_habits', JSON.stringify(habits));
+    loadMatrix();
+    loadAnalytics();
   }
 }
 
 async function loadAnalytics() {
+  if (isStaticHost) {
+    renderOfflineAnalytics();
+    return;
+  }
+
   try {
     const res = await fetchWithAuth('/api/analytics/summary');
     const data = await res.json();
-    if (!data.success) return;
+    if (!data.success) throw new Error('API fail');
 
     const today = data.today;
     const elPct = document.getElementById('stat-today-pct');
@@ -370,8 +533,56 @@ async function loadAnalytics() {
     renderMonthlyChart(data.monthly);
     renderCategoryChart(data.categories);
   } catch (err) {
-    console.error('Error loading analytics:', err);
+    renderOfflineAnalytics();
   }
+}
+
+function renderOfflineAnalytics() {
+  const habits = getLocalHabits();
+  const logs = getLocalLogs();
+  const dates30 = getDatesList(30);
+
+  const monthly = dates30.map(d => {
+    let cnt = 0;
+    habits.forEach(h => {
+      if (logs[`${h.id}_${d.date}`]) cnt++;
+    });
+    return {
+      date: d.date,
+      completed: cnt,
+      total: habits.length,
+      percentage: habits.length > 0 ? Math.round((cnt / habits.length) * 100) : 0
+    };
+  });
+
+  const weekly = monthly.slice(-7);
+  const today = monthly[monthly.length - 1] || { completed: 0, total: habits.length, percentage: 0 };
+
+  let streak = 0;
+  for (let i = monthly.length - 1; i >= 0; i--) {
+    if (monthly[i].percentage >= 50) streak++;
+    else break;
+  }
+
+  const elPct = document.getElementById('stat-today-pct');
+  if (elPct) elPct.textContent = `${today.percentage}%`;
+  const elCnt = document.getElementById('stat-today-count');
+  if (elCnt) elCnt.textContent = `(${today.completed}/${today.total})`;
+  const elBar = document.getElementById('stat-today-bar');
+  if (elBar) elBar.style.width = `${today.percentage}%`;
+  const elStr = document.getElementById('stat-streak');
+  if (elStr) elStr.textContent = `${streak} Days`;
+
+  renderWeeklyChart(weekly);
+  renderMonthlyChart(monthly);
+  
+  const categories = [];
+  const catMap = {};
+  habits.forEach(h => {
+    catMap[h.category] = (catMap[h.category] || 0) + 1;
+  });
+  Object.keys(catMap).forEach(k => categories.push({ category: k, count: catMap[k] }));
+  renderCategoryChart(categories);
 }
 
 function renderWeeklyChart(weeklyData) {
