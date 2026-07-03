@@ -4,8 +4,38 @@ let monthlyLineChart = null;
 let categoryDonutChart = null;
 
 let currentDaysView = 14;
+let currentAuthTab = 'login';
+let deferredPrompt = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+  // 1. Register Service Worker for PWA Mobile/Tablet Support
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => console.log('Service Worker registered for PWA offline mobile support'))
+      .catch((err) => console.log('SW error:', err));
+  }
+
+  // Intercept PWA install prompt
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const installBtn = document.getElementById('btn-install-pwa');
+    if (installBtn) {
+      installBtn.style.display = 'flex';
+      installBtn.addEventListener('click', () => {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choice) => {
+          if (choice.outcome === 'accepted') {
+            installBtn.style.display = 'none';
+            showToast('Installing Habit Studio to home screen...', 'cyan');
+          }
+          deferredPrompt = null;
+        });
+      });
+    }
+  });
+
+  // 2. Horizon Selection
   const daysSelect = document.getElementById('matrix-days-select');
   if (daysSelect) {
     daysSelect.addEventListener('change', (e) => {
@@ -14,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Quick Habit Creator Form
+  // 3. Quick Habit Creator Form
   const habitForm = document.getElementById('habit-creator-form');
   if (habitForm) {
     habitForm.addEventListener('submit', async (e) => {
@@ -25,15 +55,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!titleInput.value.trim()) return;
 
       try {
-        const res = await fetch('/api/matrix/habit', {
+        const res = await fetchWithAuth('/api/matrix/habit', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: titleInput.value.trim(), category })
         });
         const data = await res.json();
         if (data.success) {
           titleInput.value = '';
-          showToast('Habit added to your spreadsheet!', 'emerald');
+          showToast('Habit added to your private matrix!', 'emerald');
           loadMatrix();
           loadAnalytics();
         }
@@ -44,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Tab switching
+  // 4. Tab switching
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -56,19 +85,120 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Excel Export
+  // 5. Excel Export
   const btnExport = document.getElementById('btn-export-excel');
   if (btnExport) {
-    btnExport.addEventListener('click', () => {
-      showToast('Generating Excel (.xlsx) Report matching screenshot...', 'cyan');
-      window.location.href = `/api/excel/export?days=${currentDaysView}`;
+    btnExport.addEventListener('click', async () => {
+      showToast('Generating personalized Excel (.xlsx) Report...', 'cyan');
+      const token = localStorage.getItem('taskpulse_token');
+      const res = await fetch(`/api/excel/export?days=${currentDaysView}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Habits_${localStorage.getItem('taskpulse_user') || 'AmolKumarSingh'}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
     });
   }
 
-  // Initial load
-  loadMatrix();
-  loadAnalytics();
+  // 6. Auth Form Handler
+  const authForm = document.getElementById('form-auth');
+  if (authForm) {
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const emailOrUsername = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value.trim();
+      const username = document.getElementById('auth-username').value.trim();
+
+      const endpoint = currentAuthTab === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const body = currentAuthTab === 'login' 
+        ? { loginId: emailOrUsername, password }
+        : { username, email: emailOrUsername, password };
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.success) {
+          localStorage.setItem('taskpulse_token', data.token);
+          localStorage.setItem('taskpulse_user', data.user.username);
+          document.getElementById('auth-modal').style.display = 'none';
+          updateUserBadge();
+          showToast(`Welcome to your Habit Matrix, @${data.user.username}!`, 'emerald');
+          loadMatrix();
+          loadAnalytics();
+        } else {
+          showToast(data.error || 'Authentication failed', 'rose');
+        }
+      } catch (err) {
+        showToast('Connection error', 'rose');
+      }
+    });
+  }
+
+  // Check Auth on Startup
+  initAuth();
 });
+
+// Helper: fetch with Auth header
+async function fetchWithAuth(url, options = {}) {
+  const token = localStorage.getItem('taskpulse_token');
+  const headers = options.headers || {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  return fetch(url, { ...options, headers });
+}
+
+function initAuth() {
+  const token = localStorage.getItem('taskpulse_token');
+  const username = localStorage.getItem('taskpulse_user');
+  if (!token || !username) {
+    document.getElementById('auth-modal').style.display = 'flex';
+  } else {
+    updateUserBadge();
+    loadMatrix();
+    loadAnalytics();
+  }
+}
+
+function switchAuthTab(tab) {
+  currentAuthTab = tab;
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  document.getElementById('field-username').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('label-email').textContent = tab === 'register' ? 'Email Address' : 'Email or Username';
+  document.getElementById('btn-auth-submit').textContent = tab === 'register' ? 'Create My Account & Matrix' : 'Sign In to Matrix';
+}
+
+async function loginAsDemo() {
+  document.getElementById('auth-email').value = 'demo@taskpulse.com';
+  document.getElementById('auth-password').value = 'password123';
+  document.getElementById('btn-auth-submit').click();
+}
+
+function updateUserBadge() {
+  const badge = document.getElementById('user-display-name');
+  const username = localStorage.getItem('taskpulse_user') || 'AmolKumarSingh';
+  if (badge) badge.textContent = `@${username}`;
+}
+
+function logoutUser() {
+  localStorage.removeItem('taskpulse_token');
+  localStorage.removeItem('taskpulse_user');
+  document.getElementById('auth-modal').style.display = 'flex';
+  showToast('Signed out successfully', 'cyan');
+}
 
 // Load Habit Matrix Grid
 async function loadMatrix() {
@@ -79,13 +209,14 @@ async function loadMatrix() {
   if (!thead || !tbody || !tfoot) return;
 
   try {
-    const res = await fetch(`/api/matrix?days=${currentDaysView}`);
+    const res = await fetchWithAuth(`/api/matrix?days=${currentDaysView}`);
+    if (res.status === 401) return logoutUser();
+    
     const data = await res.json();
     if (!data.success) return;
 
-    // 1. Build Header Row
     let headHtml = `<tr>
-      <th class="habit-header" style="min-width: 240px;">My Habits</th>`;
+      <th class="habit-header" style="min-width: 220px;">My Habits (@${localStorage.getItem('taskpulse_user') || 'Amol'})</th>`;
     
     data.dates.forEach(d => {
       headHtml += `
@@ -97,7 +228,6 @@ async function loadMatrix() {
     headHtml += `</tr>`;
     thead.innerHTML = headHtml;
 
-    // 2. Build Habit Rows (with Sage Green background matching user image)
     let bodyHtml = '';
     data.habits.forEach(habit => {
       bodyHtml += `<tr>
@@ -122,7 +252,6 @@ async function loadMatrix() {
     });
     tbody.innerHTML = bodyHtml;
 
-    // 3. Build Progress Footer Rows matching image!
     let pctRowHtml = `<tr class="progress-row-pct">
       <td style="text-align: left; padding-left: 16px; font-weight:800; color: #f8fafc;">Progress (%)</td>`;
     let countRowHtml = `<tr class="progress-row-cnt">
@@ -142,12 +271,10 @@ async function loadMatrix() {
   }
 }
 
-// Toggle Matrix Checkbox
 async function toggleCell(habitId, dateStr) {
   try {
-    const res = await fetch('/api/matrix/toggle', {
+    const res = await fetchWithAuth('/api/matrix/toggle', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ habit_id: habitId, date: dateStr })
     });
     const data = await res.json();
@@ -160,11 +287,10 @@ async function toggleCell(habitId, dateStr) {
   }
 }
 
-// Delete Habit
 async function deleteHabit(habitId) {
-  if (!confirm('Remove this habit from your tracking matrix?')) return;
+  if (!confirm('Remove this habit from your private matrix?')) return;
   try {
-    await fetch(`/api/matrix/habit/${habitId}`, { method: 'DELETE' });
+    await fetchWithAuth(`/api/matrix/habit/${habitId}`, { method: 'DELETE' });
     showToast('Habit removed', 'rose');
     loadMatrix();
     loadAnalytics();
@@ -173,14 +299,12 @@ async function deleteHabit(habitId) {
   }
 }
 
-// Load Analytics Charts
 async function loadAnalytics() {
   try {
-    const res = await fetch('/api/analytics/summary');
+    const res = await fetchWithAuth('/api/analytics/summary');
     const data = await res.json();
     if (!data.success) return;
 
-    // Update Pills
     const today = data.today;
     const elPct = document.getElementById('stat-today-pct');
     if (elPct) elPct.textContent = `${today.percentage}%`;
@@ -215,28 +339,14 @@ function renderWeeklyChart(weeklyData) {
     data: {
       labels,
       datasets: [
-        {
-          label: 'Habits Completed',
-          data: completedData,
-          backgroundColor: '#10b981',
-          borderRadius: 6,
-          stack: 'stack0'
-        },
-        {
-          label: 'Pending Habits',
-          data: pendingData,
-          backgroundColor: 'rgba(255, 255, 255, 0.12)',
-          borderRadius: 6,
-          stack: 'stack0'
-        }
+        { label: 'Habits Completed', data: completedData, backgroundColor: '#10b981', borderRadius: 6, stack: 'stack0' },
+        { label: 'Pending Habits', data: pendingData, backgroundColor: 'rgba(255, 255, 255, 0.12)', borderRadius: 6, stack: 'stack0' }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top', labels: { color: '#94a3b8', font: { family: 'Inter' } } }
-      },
+      plugins: { legend: { position: 'top', labels: { color: '#94a3b8', font: { family: 'Inter' } } } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
         y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8', stepSize: 1 } }
@@ -313,9 +423,7 @@ function renderCategoryChart(categoriesData) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'right', labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } } }
-      },
+      plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } } } },
       cutout: '70%'
     }
   });

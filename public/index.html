@@ -2,209 +2,191 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TaskPulse Excel Studio | Habit Matrix & Spreadsheet Tracker</title>
-  <meta name="description" content="Exact habit matrix spreadsheet tracker with pastel green habit labels, interactive checkmarks across days, and Chart.js analytics.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TaskPulse Excel Studio | Daily Habit Matrix Tracker</title>
+  <meta name="description" content="Premium daily habit matrix progress tracker with Excel checkmark tracking and Chart.js analytics">
+  <meta name="theme-color" content="#10b981">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2310b981'/%3E%3Ctext x='50' y='68' font-size='50' text-anchor='middle' fill='white'%3E☑%3C/text%3E%3C/svg%3E">
   
-  <!-- Google Fonts: Outfit & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
-  
-  <!-- Chart.js -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  
-  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <!-- Ambient background glow elements -->
-  <div class="ambient-glow glow-cyan"></div>
-  <div class="ambient-glow glow-emerald"></div>
-  <div class="ambient-glow glow-violet"></div>
+  <div class="background-glow"></div>
+
+  <!-- Authentication Modal / Portal -->
+  <div id="auth-modal" class="auth-overlay">
+    <div class="auth-card glass-panel">
+      <div class="auth-header">
+        <div class="logo-icon">📊</div>
+        <h2>Welcome to TaskPulse Studio</h2>
+        <p id="auth-subtitle">Login to load your private Habit Matrix</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button id="tab-login" class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+        <button id="tab-register" class="auth-tab" onclick="switchAuthTab('register')">Create Account</button>
+      </div>
+
+      <form id="form-auth" class="auth-form">
+        <div id="field-username" class="form-group" style="display: none;">
+          <label>Username</label>
+          <input type="text" id="auth-username" placeholder="e.g. AmolSingh">
+        </div>
+        <div class="form-group">
+          <label id="label-email">Email or Username</label>
+          <input type="text" id="auth-email" placeholder="demo@taskpulse.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="auth-password" placeholder="••••••••" required>
+        </div>
+        <button type="submit" id="btn-auth-submit" class="btn-primary auth-submit-btn">Sign In to Matrix</button>
+      </form>
+
+      <div class="auth-footer">
+        <span onclick="loginAsDemo()" class="demo-link">⚡ Or Click Here to try Demo Account right now</span>
+      </div>
+    </div>
+  </div>
 
   <div class="app-container">
-    <!-- Header Navbar -->
-    <header class="glass-header">
+    <!-- Top Navbar -->
+    <header class="navbar glass-panel">
       <div class="brand">
-        <div class="brand-icon">
-          <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2.2" fill="none">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <path d="M9 15l2 2 4-4"></path>
-          </svg>
-        </div>
-        <div>
-          <h1 id="main-title" class="brand-title">Habit Matrix <span class="gradient-text">Excel Studio</span></h1>
-          <p class="brand-subtitle">Interactive Checkmark Grid matching your Excel design</p>
+        <div class="logo-icon">📊</div>
+        <div class="brand-text">
+          <h1>TaskPulse <span>Excel Studio</span></h1>
+          <span class="badge">Habit Matrix Engine</span>
         </div>
       </div>
+      
+      <div class="nav-controls">
+        <button id="btn-install-pwa" class="btn-pwa" style="display: none;">
+          📱 Install Mobile App
+        </button>
 
-      <!-- Quick Metrics Pills -->
-      <div class="metrics-bar">
-        <div class="metric-pill glass-card" id="pill-today">
-          <span class="metric-label">Today's Progress</span>
-          <div class="metric-value-row">
-            <span id="stat-today-pct" class="metric-value emerald-text">0%</span>
-            <span id="stat-today-count" class="metric-subtext">(0/0)</span>
-          </div>
-          <div class="progress-track">
-            <div id="stat-today-bar" class="progress-fill emerald-fill" style="width: 0%"></div>
-          </div>
+        <div id="user-profile-badge" class="user-badge glass-card">
+          <span class="user-avatar">👤</span>
+          <span id="user-display-name">@AmolKumarSingh</span>
+          <button onclick="logoutUser()" class="btn-logout" title="Sign out">Sign Out</button>
         </div>
 
-        <div class="metric-pill glass-card" id="pill-streak">
-          <span class="metric-label">Productivity Streak</span>
-          <div class="metric-value-row">
-            <span id="stat-streak" class="metric-value cyan-text">0 Days</span>
-            <span class="fire-icon">🔥</span>
-          </div>
-          <span class="metric-subtext">Consecutive >50% days</span>
-        </div>
-      </div>
-
-      <!-- Excel Actions Controls -->
-      <div class="excel-actions">
-        <button id="btn-export-excel" class="btn btn-primary pulse-btn">
-          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="8" y1="13" x2="16" y2="13"></line>
-            <line x1="8" y1="17" x2="16" y2="17"></line>
-          </svg>
+        <button id="btn-export-excel" class="btn-excel">
+          <span class="excel-icon">📗</span>
           <span>Export Excel (.xlsx) matching Screenshot</span>
         </button>
       </div>
     </header>
 
-    <!-- Main Dashboard Grid -->
-    <main class="dashboard-grid">
+    <!-- Main Content Layout -->
+    <main class="main-grid">
       
-      <!-- Left Column: Interactive Habit Matrix View -->
-      <section class="spreadsheet-section glass-card" id="section-spreadsheet">
-        <div class="section-header">
-          <div class="section-title-row">
-            <h2>My Habits Spreadsheet Matrix</h2>
-            <span class="badge badge-excel">LIVE EXCEL GRID</span>
+      <!-- Top Metrics Bar -->
+      <section class="metrics-bar grid-4">
+        <div class="metric-card glass-panel">
+          <span class="metric-label">Today's Progress</span>
+          <div class="metric-value-row">
+            <span id="stat-today-pct" class="metric-value text-gradient">0%</span>
+            <span id="stat-today-count" class="metric-sub">(0/0)</span>
           </div>
-          
-          <div class="grid-controls">
-            <label for="matrix-days-select" style="font-size: 0.85rem; color: #94a3b8;">View Columns:</label>
-            <select id="matrix-days-select" class="glass-input">
-              <option value="14" selected>Past 14 Days</option>
-              <option value="7">Past 7 Days</option>
-              <option value="21">Past 21 Days</option>
+          <div class="progress-bar-bg">
+            <div id="stat-today-bar" class="progress-bar-fill"></div>
+          </div>
+        </div>
+
+        <div class="metric-card glass-panel">
+          <span class="metric-label">Habit Consistency</span>
+          <span id="stat-streak" class="metric-value text-cyan">0 Days</span>
+          <span class="metric-caption">Current daily matrix streak</span>
+        </div>
+
+        <div class="metric-card glass-panel col-span-2">
+          <span class="metric-label">⚡ Quick Habit Creator</span>
+          <form id="habit-creator-form" class="quick-add-form">
+            <input type="text" id="new-habit-title" placeholder="Add custom habit (e.g. 10k Steps 🚶)..." required>
+            <select id="new-habit-category">
+              <option value="Health">Health 💪</option>
+              <option value="Personal">Personal 🌟</option>
+              <option value="Learning">Learning 📚</option>
+              <option value="Finance">Finance 💰</option>
+              <option value="Work">Work 🎯</option>
+            </select>
+            <button type="submit" class="btn-primary">+ Add Row</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Excel Spreadsheet Habit Matrix Section -->
+      <section class="matrix-section glass-panel">
+        <div class="section-header">
+          <div>
+            <h2>🗓️ Daily Habit Matrix Spreadsheet</h2>
+            <p>Click checkboxes to toggle completion. Automatically formats into exact Excel layout!</p>
+          </div>
+          <div class="matrix-actions">
+            <label for="matrix-days-select">View Horizon:</label>
+            <select id="matrix-days-select" class="select-control">
+              <option value="7">Last 7 Days</option>
+              <option value="14" selected>Last 14 Days</option>
+              <option value="21">Last 21 Days</option>
             </select>
           </div>
         </div>
 
-        <!-- Inline Quick Habit Creator Form -->
-        <form id="habit-creator-form" class="task-form glass-form">
-          <input type="text" id="new-habit-title" placeholder="Add new habit (e.g. Drink 2L Water 💧)..." required autocomplete="off">
-          
-          <select id="new-habit-category">
-            <option value="Health">🏋️ Health</option>
-            <option value="Personal" selected>🏠 Personal</option>
-            <option value="Learning">📚 Learning</option>
-            <option value="Work">💼 Work</option>
-            <option value="Finance">💰 Finance</option>
-          </select>
-          
-          <button type="submit" class="btn btn-add">
-            <span>+ Add Habit Row</span>
-          </button>
-        </form>
-
-        <!-- Matrix Table Grid -->
-        <div class="matrix-responsive">
-          <table class="matrix-grid" id="matrix-table">
-            <thead id="matrix-thead">
-              <!-- Dynamically populated day columns -->
-            </thead>
-            <tbody id="matrix-tbody">
-              <!-- Dynamically populated habits & checkboxes -->
-            </tbody>
-            <tfoot id="matrix-tfoot">
-              <!-- Dynamically populated Progress % rows -->
-            </tfoot>
+        <!-- Scrollable Spreadsheet Wrapper -->
+        <div class="matrix-table-wrapper">
+          <table class="matrix-table">
+            <thead id="matrix-thead"></thead>
+            <tbody id="matrix-tbody"></tbody>
+            <tfoot id="matrix-tfoot"></tfoot>
           </table>
         </div>
       </section>
 
-      <!-- Right Column: Interactive Charts Analytics -->
-      <section class="analytics-section">
-        
-        <!-- Tab navigation for Weekly vs Monthly -->
-        <div class="analytics-tabs glass-card">
-          <button class="tab-btn active" id="tab-weekly" data-tab="weekly">
-            Weekly Progress
-          </button>
-          <button class="tab-btn" id="tab-monthly" data-tab="monthly">
-            Monthly Trend Chart
-          </button>
-          <button class="tab-btn" id="tab-categories" data-tab="categories">
-            Category Share
-          </button>
+      <!-- Analytics Dashboard Tabs -->
+      <section class="analytics-section glass-panel">
+        <div class="section-header">
+          <div>
+            <h2>📈 Productivity & Chart Analytics</h2>
+            <p>Visual breakdown of your habits and completion trends</p>
+          </div>
+          <div class="tabs">
+            <button class="tab-btn active" data-tab="weekly">Weekly Progress</button>
+            <button class="tab-btn" data-tab="monthly">30-Day Trend</button>
+            <button class="tab-btn" data-tab="categories">Category Distribution</button>
+          </div>
         </div>
 
-        <!-- Weekly Progress Chart Card -->
-        <div class="chart-card glass-card tab-content active" id="chart-view-weekly">
-          <div class="chart-header">
-            <div>
-              <h3>Weekly Completion Volume</h3>
-              <p>Habits checked off each day</p>
-            </div>
-            <span class="chart-badge emerald-badge">Past 7 Days</span>
-          </div>
+        <div class="tab-content" id="chart-view-weekly">
           <div class="chart-container">
             <canvas id="weeklyBarChart"></canvas>
           </div>
         </div>
 
-        <!-- Monthly Progress Chart Card -->
-        <div class="chart-card glass-card tab-content" id="chart-view-monthly" style="display: none;">
-          <div class="chart-header">
-            <div>
-              <h3>30-Day Productivity Trend</h3>
-              <p>Daily completion percentage trajectory</p>
-            </div>
-            <span class="chart-badge cyan-badge">Past 30 Days</span>
-          </div>
+        <div class="tab-content" id="chart-view-monthly" style="display: none;">
           <div class="chart-container">
             <canvas id="monthlyLineChart"></canvas>
           </div>
         </div>
 
-        <!-- Category Breakdown Donut Card -->
-        <div class="chart-card glass-card tab-content" id="chart-view-categories" style="display: none;">
-          <div class="chart-header">
-            <div>
-              <h3>Habit Breakdown by Category</h3>
-              <p>Distribution across life areas</p>
+        <div class="tab-content" id="chart-view-categories" style="display: none;">
+          <div class="chart-container flex-center">
+            <div style="width: 320px; height: 320px;">
+              <canvas id="categoryDonutChart"></canvas>
             </div>
-            <span class="chart-badge violet-badge">Focus</span>
-          </div>
-          <div class="chart-container donut-container">
-            <canvas id="categoryDonutChart"></canvas>
           </div>
         </div>
-
-        <!-- Quick Excel Info Banner -->
-        <div class="excel-banner glass-card">
-          <div class="excel-banner-icon">📊</div>
-          <div class="excel-banner-content">
-            <h4>Exact Excel (.xlsx) Match</h4>
-            <p>Click <strong>Export Excel (.xlsx)</strong> above to download an actual spreadsheet formatted exactly like your photo with soft pastel green habit labels and formula-driven progress rows!</p>
-          </div>
-        </div>
-
       </section>
 
     </main>
   </div>
 
-  <!-- Toast Notification System -->
   <div id="toast-container" class="toast-container"></div>
-
-  <script src="/js/app.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
