@@ -192,7 +192,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function showVerificationScreen(sampleCode) {
   document.getElementById('auth-main-view').style.display = 'none';
   document.getElementById('verify-email-view').style.display = 'block';
-  showToast(`Verification code dispatched to ${pendingVerificationEmail} (Simulated Code: ${sampleCode})`, 'cyan');
+  const elCode = document.getElementById('verify-displayed-code');
+  if (elCode && sampleCode) elCode.textContent = sampleCode;
+  showToast(`Verification code sent to ${pendingVerificationEmail} (Simulated Code: ${sampleCode})`, 'cyan');
 }
 
 function getLocalHabits() {

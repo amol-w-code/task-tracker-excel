@@ -61,6 +61,13 @@
           <div class="logo-icon">📧</div>
           <h2>Verify Your Email</h2>
           <p id="verify-subtitle">Enter the 6-digit verification code sent to your email address.</p>
+          
+          <!-- Persistent Verification Code Box for Standalone / Unconfigured SMTP environments -->
+          <div id="verify-simulator-box" style="margin-top: 14px; padding: 12px; background: rgba(99, 102, 241, 0.15); border: 1px dashed #6366f1; border-radius: 8px; font-size: 0.85rem; color: #cbd5e1;">
+            <span>⚡ Security Verification Code: </span>
+            <strong id="verify-displayed-code" onclick="document.getElementById('verify-code-input').value = this.textContent; showToast('Code copied & filled!', 'emerald');" style="color: #10b981; font-size: 1.1rem; letter-spacing: 3px; cursor: pointer; text-decoration: underline;" title="Click to auto-fill">889900</strong>
+            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">Click code above to auto-fill and verify immediately</div>
+          </div>
         </div>
         <form id="form-verify-email" class="auth-form">
           <div class="form-group">
