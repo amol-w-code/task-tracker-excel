@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskPulse Excel Studio | Habit Matrix & Spreadsheet Tracker</title>
+  <meta name="description" content="Exact habit matrix spreadsheet tracker with pastel green habit labels, interactive checkmarks across days, and Chart.js analytics.">
+  
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow glow-cyan"></div>
+  <div class="ambient-glow glow-emerald"></div>
+  <div class="ambient-glow glow-violet"></div>
+
+  <div class="app-container">
+    <!-- Header Navbar -->
+    <header class="glass-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2.2" fill="none">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <path d="M9 15l2 2 4-4"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 id="main-title" class="brand-title">Habit Matrix <span class="gradient-text">Excel Studio</span></h1>
+          <p class="brand-subtitle">Interactive Checkmark Grid matching your Excel design</p>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Pills -->
+      <div class="metrics-bar">
+        <div class="metric-pill glass-card" id="pill-today">
+          <span class="metric-label">Today's Progress</span>
+          <div class="metric-value-row">
+            <span id="stat-today-pct" class="metric-value emerald-text">0%</span>
+            <span id="stat-today-count" class="metric-subtext">(0/0)</span>
+          </div>
+          <div class="progress-track">
+            <div id="stat-today-bar" class="progress-fill emerald-fill" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="metric-pill glass-card" id="pill-streak">
+          <span class="metric-label">Productivity Streak</span>
+          <div class="metric-value-row">
+            <span id="stat-streak" class="metric-value cyan-text">0 Days</span>
+            <span class="fire-icon">🔥</span>
+          </div>
+          <span class="metric-subtext">Consecutive >50% days</span>
+        </div>
+      </div>
+
+      <!-- Excel Actions Controls -->
+      <div class="excel-actions">
+        <button id="btn-export-excel" class="btn btn-primary pulse-btn">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="8" y1="13" x2="16" y2="13"></line>
+            <line x1="8" y1="17" x2="16" y2="17"></line>
+          </svg>
+          <span>Export Excel (.xlsx) matching Screenshot</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Dashboard Grid -->
+    <main class="dashboard-grid">
+      
+      <!-- Left Column: Interactive Habit Matrix View -->
+      <section class="spreadsheet-section glass-card" id="section-spreadsheet">
+        <div class="section-header">
+          <div class="section-title-row">
+            <h2>My Habits Spreadsheet Matrix</h2>
+            <span class="badge badge-excel">LIVE EXCEL GRID</span>
+          </div>
+          
+          <div class="grid-controls">
+            <label for="matrix-days-select" style="font-size: 0.85rem; color: #94a3b8;">View Columns:</label>
+            <select id="matrix-days-select" class="glass-input">
+              <option value="14" selected>Past 14 Days</option>
+              <option value="7">Past 7 Days</option>
+              <option value="21">Past 21 Days</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Inline Quick Habit Creator Form -->
+        <form id="habit-creator-form" class="task-form glass-form">
+          <input type="text" id="new-habit-title" placeholder="Add new habit (e.g. Drink 2L Water 💧)..." required autocomplete="off">
+          
+          <select id="new-habit-category">
+            <option value="Health">🏋️ Health</option>
+            <option value="Personal" selected>🏠 Personal</option>
+            <option value="Learning">📚 Learning</option>
+            <option value="Work">💼 Work</option>
+            <option value="Finance">💰 Finance</option>
+          </select>
+          
+          <button type="submit" class="btn btn-add">
+            <span>+ Add Habit Row</span>
+          </button>
+        </form>
+
+        <!-- Matrix Table Grid -->
+        <div class="matrix-responsive">
+          <table class="matrix-grid" id="matrix-table">
+            <thead id="matrix-thead">
+              <!-- Dynamically populated day columns -->
+            </thead>
+            <tbody id="matrix-tbody">
+              <!-- Dynamically populated habits & checkboxes -->
+            </tbody>
+            <tfoot id="matrix-tfoot">
+              <!-- Dynamically populated Progress % rows -->
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+      <!-- Right Column: Interactive Charts Analytics -->
+      <section class="analytics-section">
+        
+        <!-- Tab navigation for Weekly vs Monthly -->
+        <div class="analytics-tabs glass-card">
+          <button class="tab-btn active" id="tab-weekly" data-tab="weekly">
+            Weekly Progress
+          </button>
+          <button class="tab-btn" id="tab-monthly" data-tab="monthly">
+            Monthly Trend Chart
+          </button>
+          <button class="tab-btn" id="tab-categories" data-tab="categories">
+            Category Share
+          </button>
+        </div>
+
+        <!-- Weekly Progress Chart Card -->
+        <div class="chart-card glass-card tab-content active" id="chart-view-weekly">
+          <div class="chart-header">
+            <div>
+              <h3>Weekly Completion Volume</h3>
+              <p>Habits checked off each day</p>
+            </div>
+            <span class="chart-badge emerald-badge">Past 7 Days</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="weeklyBarChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Monthly Progress Chart Card -->
+        <div class="chart-card glass-card tab-content" id="chart-view-monthly" style="display: none;">
+          <div class="chart-header">
+            <div>
+              <h3>30-Day Productivity Trend</h3>
+              <p>Daily completion percentage trajectory</p>
+            </div>
+            <span class="chart-badge cyan-badge">Past 30 Days</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="monthlyLineChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Category Breakdown Donut Card -->
+        <div class="chart-card glass-card tab-content" id="chart-view-categories" style="display: none;">
+          <div class="chart-header">
+            <div>
+              <h3>Habit Breakdown by Category</h3>
+              <p>Distribution across life areas</p>
+            </div>
+            <span class="chart-badge violet-badge">Focus</span>
+          </div>
+          <div class="chart-container donut-container">
+            <canvas id="categoryDonutChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Quick Excel Info Banner -->
+        <div class="excel-banner glass-card">
+          <div class="excel-banner-icon">📊</div>
+          <div class="excel-banner-content">
+            <h4>Exact Excel (.xlsx) Match</h4>
+            <p>Click <strong>Export Excel (.xlsx)</strong> above to download an actual spreadsheet formatted exactly like your photo with soft pastel green habit labels and formula-driven progress rows!</p>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast Notification System -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
