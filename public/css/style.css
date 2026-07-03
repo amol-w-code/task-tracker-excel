@@ -1,0 +1,283 @@
+:root {
+  --bg-dark: #090e17;
+  --bg-card: rgba(20, 29, 46, 0.7);
+  --bg-card-hover: rgba(30, 43, 68, 0.85);
+  --border-glass: rgba(255, 255, 255, 0.09);
+  --border-glass-bright: rgba(255, 255, 255, 0.2);
+  
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  
+  --emerald: #10b981;
+  --emerald-glow: rgba(16, 185, 129, 0.35);
+  --cyan: #06b6d4;
+  --cyan-glow: rgba(6, 182, 212, 0.35);
+  --violet: #8b5cf6;
+  --rose: #f43f5e;
+  --amber: #f59e0b;
+
+  --sage-bg: #c8e6c9;
+  --sage-text: #1b4d3e;
+
+  --font-heading: 'Outfit', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+  line-height: 1.5;
+}
+
+.ambient-glow {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.4;
+  animation: floatGlow 15s ease-in-out infinite alternate;
+}
+
+.glow-cyan {
+  top: -10%;
+  left: -5%;
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, var(--cyan-glow) 0%, transparent 70%);
+}
+
+.glow-emerald {
+  bottom: -15%;
+  right: -10%;
+  width: 60vw;
+  height: 60vw;
+  background: radial-gradient(circle, var(--emerald-glow) 0%, transparent 70%);
+}
+
+.glow-violet {
+  top: 40%;
+  left: 35%;
+  width: 40vw;
+  height: 40vw;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.2) 0%, transparent 70%);
+}
+
+@keyframes floatGlow {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, -30px) scale(1.1); }
+  100% { transform: translate(-30px, 40px) scale(0.95); }
+}
+
+.app-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 24px 32px;
+}
+
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.glass-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 20px 28px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glass);
+  border-radius: 20px;
+  margin-bottom: 28px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.brand { display: flex; align-items: center; gap: 16px; }
+.brand-icon {
+  width: 54px; height: 54px; border-radius: 14px;
+  background: linear-gradient(135deg, var(--emerald) 0%, var(--cyan) 100%);
+  display: flex; align-items: center; justify-content: center;
+  color: #090e17; box-shadow: 0 0 25px var(--emerald-glow);
+}
+.brand-title { font-family: var(--font-heading); font-size: 1.8rem; font-weight: 800; }
+.gradient-text {
+  background: linear-gradient(90deg, var(--emerald), var(--cyan));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.brand-subtitle { font-size: 0.85rem; color: var(--text-muted); }
+
+.metrics-bar { display: flex; gap: 16px; align-items: center; }
+.metric-pill { padding: 12px 20px; min-width: 200px; }
+.metric-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+.metric-value-row { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 0; }
+.metric-value { font-family: var(--font-heading); font-size: 1.5rem; font-weight: 700; }
+.emerald-text { color: var(--emerald); }
+.cyan-text { color: var(--cyan); }
+.metric-subtext { font-size: 0.8rem; color: var(--text-dim); }
+.progress-track { width: 100%; height: 6px; background: rgba(255, 255, 255, 0.06); border-radius: 10px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 10px; transition: width 0.6s ease; }
+.emerald-fill { background: linear-gradient(90deg, var(--emerald), #34d399); }
+.fire-icon { font-size: 1.3rem; }
+
+.excel-actions { display: flex; gap: 12px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px;
+  border-radius: 12px; font-family: var(--font-body); font-size: 0.9rem;
+  font-weight: 600; cursor: pointer; border: none; transition: all 0.25s;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--emerald), #059669); color: #000; font-weight: 700;
+  box-shadow: 0 4px 20px var(--emerald-glow);
+}
+.pulse-btn { animation: pulseShadow 3s infinite; }
+@keyframes pulseShadow {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  70% { box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.dashboard-grid {
+  display: grid; grid-template-columns: 1fr 450px; gap: 28px; align-items: start;
+}
+@media (max-width: 1250px) { .dashboard-grid { grid-template-columns: 1fr; } }
+
+.spreadsheet-section { padding: 24px; }
+.section-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border-glass); }
+.section-title-row { display: flex; align-items: center; gap: 12px; }
+.section-title-row h2 { font-family: var(--font-heading); font-size: 1.4rem; font-weight: 700; }
+.badge { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; }
+.badge-excel { background: rgba(6, 182, 212, 0.15); color: var(--cyan); border: 1px solid rgba(6, 182, 212, 0.3); }
+
+.glass-input {
+  background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-glass);
+  color: var(--text-main); padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; outline: none;
+}
+
+.task-form {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 12px; margin-bottom: 20px;
+  padding: 12px; background: rgba(15, 23, 42, 0.5); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.15);
+}
+.task-form input[type="text"] { background: transparent; border: none; color: var(--text-main); padding: 8px 12px; outline: none; font-size: 0.95rem; }
+.task-form select { background: rgba(30, 41, 59, 0.9); border: 1px solid var(--border-glass); color: var(--text-main); padding: 8px 14px; border-radius: 8px; }
+.btn-add { background: var(--emerald); color: #000; font-weight: 700; padding: 8px 18px; border-radius: 8px; }
+
+/* Habit Matrix Spreadsheet Table */
+.matrix-responsive {
+  overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-glass);
+}
+
+.matrix-grid {
+  width: 100%; border-collapse: collapse; text-align: center; font-size: 0.85rem;
+}
+
+.matrix-grid th {
+  background: rgba(15, 23, 42, 0.95); color: var(--text-muted); font-weight: 600;
+  padding: 10px 8px; border-bottom: 1px solid var(--border-glass); border-right: 1px solid rgba(255,255,255,0.05);
+}
+
+.matrix-grid td {
+  padding: 10px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); border-right: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Habit Column Label EXACTLY Matching Screenshot */
+.habit-cell-sage {
+  text-align: right;
+  padding-right: 16px !important;
+  font-weight: 700;
+  font-size: 0.95rem;
+  background-color: #d1e7dd !important; /* Pastel sage green */
+  color: #0f5132 !important; /* Dark forest text */
+  white-space: nowrap;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+  position: sticky;
+  left: 0;
+  z-index: 5;
+}
+
+.habit-header {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-main);
+  background: rgba(15, 23, 42, 0.98) !important;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+.day-header-num {
+  font-size: 1.05rem; font-weight: 700; color: var(--text-main); display: block;
+}
+.day-header-wk {
+  font-size: 0.75rem; color: var(--cyan); text-transform: uppercase;
+}
+
+/* Checkbox cell */
+.matrix-check-btn {
+  width: 28px; height: 28px; border-radius: 6px; border: 2px solid rgba(255,255,255,0.25);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  background: rgba(0,0,0,0.3); color: transparent; font-size: 1rem; transition: all 0.2s;
+}
+
+.matrix-check-btn.checked {
+  background: var(--emerald); border-color: var(--emerald); color: #000; font-weight: bold;
+  box-shadow: 0 0 10px var(--emerald-glow); transform: scale(1.08);
+}
+
+/* Progress Footer Rows */
+.progress-row-pct td {
+  background: rgba(30, 41, 59, 0.85); font-weight: 700; color: var(--emerald); border-top: 2px solid var(--border-glass);
+}
+.progress-row-cnt td {
+  background: rgba(15, 23, 42, 0.85); font-size: 0.8rem; color: var(--text-muted);
+}
+
+.analytics-section { display: flex; flex-direction: column; gap: 24px; }
+.analytics-tabs { display: flex; padding: 6px; gap: 6px; }
+.tab-btn {
+  flex: 1; padding: 12px; border: none; background: transparent; color: var(--text-muted);
+  font-family: var(--font-body); font-size: 0.85rem; font-weight: 600; border-radius: 12px; cursor: pointer;
+}
+.tab-btn.active { background: rgba(255, 255, 255, 0.1); color: var(--text-main); }
+
+.chart-card { padding: 24px; }
+.chart-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+.chart-header h3 { font-family: var(--font-heading); font-size: 1.2rem; font-weight: 700; }
+.chart-header p { font-size: 0.8rem; color: var(--text-muted); }
+.chart-badge { font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+.emerald-badge { background: rgba(16, 185, 129, 0.15); color: var(--emerald); }
+.cyan-badge { background: rgba(6, 182, 212, 0.15); color: var(--cyan); }
+.violet-badge { background: rgba(139, 92, 246, 0.15); color: var(--violet); }
+.chart-container { position: relative; height: 280px; width: 100%; }
+.donut-container { height: 260px; }
+
+.excel-banner { display: flex; align-items: center; gap: 16px; padding: 18px 22px; background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(6, 182, 212, 0.1)); }
+.excel-banner-icon { font-size: 2.2rem; }
+.excel-banner-content h4 { font-family: var(--font-heading); font-size: 1rem; color: var(--cyan); }
+.excel-banner-content p { font-size: 0.8rem; color: var(--text-muted); }
+
+.toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 12px; }
+.toast {
+  padding: 14px 20px; background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border-glass);
+  border-left: 4px solid var(--emerald); border-radius: 12px; color: var(--text-main); font-size: 0.9rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); display: flex; align-items: center; gap: 10px;
+}
