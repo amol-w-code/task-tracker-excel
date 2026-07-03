@@ -1,0 +1,26 @@
+{
+  "name": "taskpulse-excel-studio",
+  "version": "1.0.0",
+  "description": "Premium daily task progress tracker with Excel checkmark tracking, SQLite database, and weekly/monthly Chart.js analytics",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "task-tracker",
+    "excel",
+    "analytics",
+    "sqlite",
+    "productivity"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "sqlite3": "^5.1.7"
+  }
+}

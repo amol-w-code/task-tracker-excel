@@ -1,0 +1,6 @@
+node_modules/
+database/tasks.db
+*.log
+.DS_Store
+.vercel/
+.env
