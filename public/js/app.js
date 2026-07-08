@@ -267,18 +267,29 @@ async function handleAddHabitSubmit(e, titleId, categoryId) {
 }
 
 function navSwitchTo(view) {
-  document.querySelectorAll('.nav-item').forEach((el, idx) => {
-    if ((view === 'home' && idx === 0) || (view === 'analytics' && idx === 1)) {
+  document.querySelectorAll('.nav-item').forEach(el => {
+    if (el.getAttribute('data-nav') === view) {
       el.classList.add('active');
     } else {
       el.classList.remove('active');
     }
   });
 
-  const target = view === 'home' ? document.getElementById('section-matrix') : document.getElementById('section-analytics');
-  if (target) {
-    target.scrollIntoView({ behavior: 'smooth' });
+  const secMetrics = document.getElementById('section-metrics-bar');
+  const secMatrix = document.getElementById('section-matrix');
+  const secAnalytics = document.getElementById('section-analytics');
+
+  if (view === 'home') {
+    if (secMetrics) secMetrics.style.display = 'grid';
+    if (secMatrix) secMatrix.style.display = 'block';
+    if (secAnalytics) secAnalytics.style.display = 'none';
+  } else if (view === 'analytics') {
+    if (secMetrics) secMetrics.style.display = 'none';
+    if (secMatrix) secMatrix.style.display = 'none';
+    if (secAnalytics) secAnalytics.style.display = 'block';
   }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function openAddHabitModal() {

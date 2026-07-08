@@ -164,7 +164,7 @@
     <main class="main-grid">
       
       <!-- Top Metrics Bar -->
-      <section class="metrics-bar grid-4">
+      <section id="section-metrics-bar" class="metrics-bar grid-4">
         <div class="metric-card glass-panel">
           <span class="metric-label">Today's Progress</span>
           <div class="metric-value-row">
@@ -226,7 +226,7 @@
       </section>
 
       <!-- Analytics Dashboard Tabs -->
-      <section id="section-analytics" class="analytics-section glass-panel">
+      <section id="section-analytics" class="analytics-section glass-panel" style="display: none;">
         <div class="section-header">
           <div>
             <h2>📈 Productivity & Chart Analytics</h2>
@@ -265,12 +265,12 @@
 
   <!-- REFERENCE FLOATING BOTTOM NAVIGATION BAR -->
   <nav class="mobile-bottom-nav">
-    <div class="nav-item active" onclick="navSwitchTo('home')">
+    <div class="nav-item active" data-nav="home" onclick="navSwitchTo('home')">
       <span class="nav-icon">🏠</span>
       <span class="nav-label">Home</span>
     </div>
 
-    <div class="nav-item" onclick="navSwitchTo('analytics')">
+    <div class="nav-item" data-nav="analytics" onclick="navSwitchTo('analytics')">
       <span class="nav-icon">📈</span>
       <span class="nav-label">Charts</span>
     </div>
@@ -283,12 +283,12 @@
       </div>
     </div>
 
-    <div class="nav-item" onclick="triggerExcelExport()">
+    <div class="nav-item" data-nav="excel" onclick="triggerExcelExport()">
       <span class="nav-icon">📗</span>
       <span class="nav-label">Excel</span>
     </div>
 
-    <div class="nav-item" onclick="openProfileModal()">
+    <div class="nav-item" data-nav="profile" onclick="openProfileModal()">
       <span class="nav-icon">👤</span>
       <span class="nav-label">Profile</span>
     </div>
