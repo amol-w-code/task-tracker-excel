@@ -422,7 +422,7 @@ function switchAuthTab(tab) {
   document.getElementById('tab-register').classList.toggle('active', tab === 'register');
   document.getElementById('field-username').style.display = tab === 'register' ? 'block' : 'none';
   document.getElementById('label-email').textContent = tab === 'register' ? 'Email Address' : 'Email or Username';
-  document.getElementById('btn-auth-submit').textContent = tab === 'register' ? 'Send Verification Code' : 'Sign In to Matrix';
+  document.getElementById('btn-auth-submit').textContent = tab === 'register' ? 'Send Verification Code' : 'Login to Matrix';
 }
 
 function updateUserBadge() {
