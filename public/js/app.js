@@ -16,6 +16,22 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch((err) => console.log('SW error:', err));
   }
 
+  function updatePWAInstallVisibility() {
+    const installBtn = document.getElementById('btn-install-pwa');
+    if (!installBtn) return;
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const isMarkedInstalled = localStorage.getItem('taskpulse_pwa_installed') === 'true';
+
+    if (isStandalone || isMarkedInstalled) {
+      installBtn.style.display = 'none';
+    } else {
+      installBtn.style.display = 'flex';
+    }
+  }
+
+  updatePWAInstallVisibility();
+
   const installBtn = document.getElementById('btn-install-pwa');
   if (installBtn) {
     installBtn.addEventListener('click', () => {
@@ -23,7 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then((choice) => {
           if (choice.outcome === 'accepted') {
-            showToast('Installing Habit Studio app to your Android phone...', 'cyan');
+            localStorage.setItem('taskpulse_pwa_installed', 'true');
+            updatePWAInstallVisibility();
+            showToast('Installing Habit Studio app to your phone...', 'cyan');
           }
           deferredPrompt = null;
         });
@@ -33,9 +51,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  window.addEventListener('appinstalled', () => {
+    localStorage.setItem('taskpulse_pwa_installed', 'true');
+    updatePWAInstallVisibility();
+    showToast('📱 App Installed Successfully!', 'emerald');
+  });
+
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
+    localStorage.removeItem('taskpulse_pwa_installed');
+    updatePWAInstallVisibility();
   });
 
   const daysSelect = document.getElementById('matrix-days-select');
