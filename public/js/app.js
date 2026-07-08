@@ -16,23 +16,26 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch((err) => console.log('SW error:', err));
   }
 
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    const installBtn = document.getElementById('btn-install-pwa');
-    if (installBtn) {
-      installBtn.style.display = 'flex';
-      installBtn.addEventListener('click', () => {
+  const installBtn = document.getElementById('btn-install-pwa');
+  if (installBtn) {
+    installBtn.addEventListener('click', () => {
+      if (deferredPrompt) {
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then((choice) => {
           if (choice.outcome === 'accepted') {
-            installBtn.style.display = 'none';
-            showToast('Installing Habit Studio app...', 'cyan');
+            showToast('Installing Habit Studio app to your Android phone...', 'cyan');
           }
           deferredPrompt = null;
         });
-      });
-    }
+      } else {
+        alert("📱 To install on Android right now:\n\n1. Tap the 3 dots menu (⋮) at the top right of Chrome.\n2. Tap 'Add to Home screen' or 'Install app'.\n\nYour app will instantly appear on your mobile home screen!");
+      }
+    });
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
   });
 
   const daysSelect = document.getElementById('matrix-days-select');

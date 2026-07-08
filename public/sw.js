@@ -1,10 +1,10 @@
-const CACHE_NAME = 'taskpulse-matrix-v2';
+const CACHE_NAME = 'taskpulse-matrix-v3';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/css/style.css',
-  '/js/app.js',
-  '/manifest.json'
+  './',
+  './index.html',
+  './css/style.css',
+  './js/app.js',
+  './manifest.json'
 ];
 
 self.addEventListener('install', (e) => {
