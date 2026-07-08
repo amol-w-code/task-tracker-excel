@@ -53,7 +53,12 @@ document.addEventListener('DOMContentLoaded', () => {
           deferredPrompt = null;
         });
       } else {
-        alert("📱 To install on Android right now:\n\n1. Tap the 3 dots menu (⋮) at the top right of Chrome.\n2. Tap 'Add to Home screen' or 'Install app'.\n\nYour app will instantly appear on your mobile home screen!");
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+          alert("📱 To install Habit Tasker on your iPhone / iPad right now:\n\n1. Tap the Share button [↑] (the square icon with an arrow pointing up at the bottom of Safari).\n2. Scroll down and tap 'Add to Home Screen' (+).\n3. Tap 'Add' in the top right.\n\nYour custom Habit Tasker skull key icon will instantly appear on your iPhone home screen as a standalone app!");
+        } else {
+          alert("📱 To install Habit Tasker on your Android phone right now:\n\n1. Tap the 3 dots menu (⋮) at the top right of Chrome.\n2. Tap 'Add to Home screen' or 'Install app'.\n\nYour custom Habit Tasker skull key icon will instantly appear on your mobile home screen!");
+        }
       }
     });
   }
