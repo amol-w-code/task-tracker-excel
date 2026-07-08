@@ -19,9 +19,11 @@
   "author": "Antigravity",
   "license": "MIT",
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "exceljs": "^4.4.0",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
     "jsonwebtoken": "^9.0.3",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.14",

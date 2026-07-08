@@ -120,7 +120,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isStaticHost) {
         if (currentAuthTab === 'register') {
           pendingVerificationEmail = emailOrUsername;
-          showVerificationScreen('889900');
+          const offlineCode = Math.floor(100000 + Math.random() * 900000).toString();
+          showVerificationScreen(offlineCode);
           return;
         }
         localStorage.setItem('taskpulse_token', 'offline-static-token');
@@ -166,7 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         if (currentAuthTab === 'register') {
           pendingVerificationEmail = emailOrUsername;
-          showVerificationScreen('889900');
+          const fallbackCode = Math.floor(100000 + Math.random() * 900000).toString();
+          showVerificationScreen(fallbackCode);
         } else {
           localStorage.setItem('taskpulse_token', 'offline-static-token');
           localStorage.setItem('taskpulse_user', username);
@@ -416,11 +418,28 @@ function initAuth() {
   const username = localStorage.getItem('taskpulse_user');
   if (!token || !username) {
     document.getElementById('auth-modal').style.display = 'flex';
-  } else {
-    updateUserBadge();
-    loadMatrix();
-    loadAnalytics();
+    return;
   }
+
+  // Check token expiry (skip for offline static tokens)
+  if (token !== 'offline-static-token') {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[0]));
+      if (payload.exp && Date.now() > payload.exp) {
+        showToast('Session expired. Please login again.', 'rose');
+        logoutUser();
+        return;
+      }
+    } catch (e) {
+      // Token parse failed — force re-login
+      logoutUser();
+      return;
+    }
+  }
+
+  updateUserBadge();
+  loadMatrix();
+  loadAnalytics();
 }
 
 function switchAuthTab(tab) {
@@ -822,7 +841,13 @@ function showToast(message, type = 'emerald') {
   if (type === 'rose') borderColor = '#f43f5e';
   
   toast.style.borderLeftColor = borderColor;
-  toast.innerHTML = `<span>⚡</span> <span>${message}</span>`;
+  const iconSpan = document.createElement('span');
+  iconSpan.textContent = '⚡';
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = message;
+  toast.appendChild(iconSpan);
+  toast.appendChild(document.createTextNode(' '));
+  toast.appendChild(msgSpan);
   
   container.appendChild(toast);
   setTimeout(() => {

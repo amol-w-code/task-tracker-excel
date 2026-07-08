@@ -21,8 +21,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
   }
 });
 
-function hashPassword(password) {
-  return crypto.createHash('sha256').update(password).digest('hex');
+const bcrypt = require('bcrypt');
+const SALT_ROUNDS = 12;
+
+async function hashPassword(password) {
+  return bcrypt.hash(password, SALT_ROUNDS);
+}
+
+async function comparePassword(password, hash) {
+  return bcrypt.compare(password, hash);
 }
 
 function initSchema() {
@@ -66,5 +73,6 @@ function initSchema() {
 
 module.exports = {
   db,
-  hashPassword
+  hashPassword,
+  comparePassword
 };

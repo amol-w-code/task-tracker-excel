@@ -1,20 +1,54 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { db, hashPassword } = require('./src/database');
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
+const { db, hashPassword, comparePassword } = require('./src/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'taskpulse_secret_key_2026';
 
-app.use(cors());
-app.use(express.json());
+// Security: Use env var for JWT secret; generate random fallback for dev only
+const JWT_SECRET = process.env.JWT_SECRET || ('dev_fallback_' + crypto.randomBytes(32).toString('hex'));
+if (!process.env.JWT_SECRET) {
+  console.warn('[SECURITY WARNING] JWT_SECRET not set in environment. Using random dev secret — tokens will not persist across restarts.');
+}
+
+// Security: Restrict CORS to known origins
+const allowedOrigins = [
+  'https://amol-w-code.github.io',
+  'http://localhost:3000',
+  'http://localhost:5500'
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.some(o => origin.startsWith(o))) {
+      callback(null, true);
+    } else if (process.env.VERCEL) {
+      callback(null, true); // Allow Vercel preview URLs
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Simple JWT token generator
 function generateToken(user) {
   const payload = Buffer.from(JSON.stringify({ id: user.id, username: user.username, exp: Date.now() + 86400000 })).toString('base64');
-  const signature = hashPassword(payload + JWT_SECRET).slice(0, 32);
+  const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex').slice(0, 32);
   return `${payload}.${signature}`;
 }
 
@@ -27,7 +61,7 @@ function authMiddleware(req, res, next) {
   const token = authHeader.split(' ')[1];
   try {
     const [payload, signature] = token.split('.');
-    const expectedSig = hashPassword(payload + JWT_SECRET).slice(0, 32);
+    const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex').slice(0, 32);
     if (signature !== expectedSig) {
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
@@ -65,7 +99,6 @@ async function sendVerificationEmail(email, code, username) {
     </div>
   `;
 
-  // 1. Resend HTTP API support (Best for Vercel Serverless deployments)
   if (process.env.RESEND_API_KEY) {
     try {
       const response = await fetch('https://api.resend.com/emails', {
@@ -89,7 +122,6 @@ async function sendVerificationEmail(email, code, username) {
     }
   }
 
-  // 2. Nodemailer SMTP support (Gmail App Passwords, SendGrid, Mailgun, Outlook)
   if (process.env.SMTP_HOST || process.env.EMAIL_USER) {
     try {
       const nodemailer = require('nodemailer');
@@ -116,46 +148,51 @@ async function sendVerificationEmail(email, code, username) {
     }
   }
 
-  // 3. Simulated verification toast fallback if env variables not configured yet
   console.log(`[SIMULATED EMAIL DISPATCH] To: ${email} | Verification Code: ${code}`);
-  return { sent: false, provider: 'Simulator', devCode: code };
+  return { sent: false, provider: 'Simulator' };
 }
 
 // ==========================================
 // AUTHENTICATION & EMAIL VERIFICATION API
 // ==========================================
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password) {
     return res.status(400).json({ error: 'Username, email, and password required' });
   }
 
-  const passHash = hashPassword(password);
-  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+  }
 
-  db.run(`INSERT INTO users (username, email, password_hash, is_verified, verification_code) VALUES (?, ?, ?, 0, ?)`,
-    [username, email, passHash, verificationCode],
-    async function (err) {
-      if (err) {
-        return res.status(400).json({ error: 'Username or Email already registered' });
+  try {
+    const passHash = await hashPassword(password);
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    db.run(`INSERT INTO users (username, email, password_hash, is_verified, verification_code) VALUES (?, ?, ?, 0, ?)`,
+      [username, email, passHash, verificationCode],
+      async function (err) {
+        if (err) {
+          return res.status(400).json({ error: 'Username or Email already registered' });
+        }
+        
+        const dispatchResult = await sendVerificationEmail(email, verificationCode, username);
+        
+        return res.json({
+          success: true,
+          requireVerification: true,
+          email,
+          emailSent: dispatchResult.sent,
+          message: dispatchResult.sent 
+            ? `Verification code dispatched to ${email}!`
+            : 'A 6-digit verification code has been generated. Check the app for your code.'
+        });
       }
-      
-      const dispatchResult = await sendVerificationEmail(email, verificationCode, username);
-      
-      return res.json({
-        success: true,
-        requireVerification: true,
-        email,
-        emailSent: dispatchResult.sent,
-        provider: dispatchResult.provider,
-        devCode: dispatchResult.devCode || verificationCode, // Fallback for UI simulation if SMTP unconfigured
-        message: dispatchResult.sent 
-          ? `Verification code dispatched to ${email} via ${dispatchResult.provider}!`
-          : 'A 6-digit verification code has been sent to your email.'
-      });
-    }
-  );
+    );
+  } catch (err) {
+    return res.status(500).json({ error: 'Server error during registration' });
+  }
 });
 
 app.post('/api/auth/verify-email', (req, res) => {
@@ -168,7 +205,7 @@ app.post('/api/auth/verify-email', (req, res) => {
     if (err || !user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    if (user.verification_code !== code && code !== '889900') {
+    if (user.verification_code !== code) {
       return res.status(400).json({ error: 'Invalid 6-digit verification code' });
     }
 
@@ -199,17 +236,21 @@ app.post('/api/auth/verify-email', (req, res) => {
   });
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { loginId, password } = req.body;
   if (!loginId || !password) {
     return res.status(400).json({ error: 'Login ID and password required' });
   }
 
-  const passHash = hashPassword(password);
-  db.get(`SELECT * FROM users WHERE (username = ? OR email = ?) AND password_hash = ?`,
-    [loginId, loginId, passHash],
+  db.get(`SELECT * FROM users WHERE username = ? OR email = ?`,
+    [loginId, loginId],
     async (err, user) => {
       if (err || !user) {
+        return res.status(401).json({ error: 'Invalid username/email or password' });
+      }
+
+      const isValidPassword = await comparePassword(password, user.password_hash);
+      if (!isValidPassword) {
         return res.status(401).json({ error: 'Invalid username/email or password' });
       }
 
@@ -224,8 +265,6 @@ app.post('/api/auth/login', async (req, res) => {
           requireVerification: true,
           email: user.email,
           emailSent: dispatchResult.sent,
-          provider: dispatchResult.provider,
-          devCode: dispatchResult.devCode || newCode,
           message: 'Account not verified. Please enter the verification code sent to your email.'
         });
       }
@@ -291,7 +330,7 @@ app.get('/api/matrix', authMiddleware, (req, res) => {
 
 app.post('/api/matrix/habit', authMiddleware, (req, res) => {
   const { title, category } = req.body;
-  if (!title) return res.status(400).json({ error: 'Title required' });
+  if (!title || title.length > 100) return res.status(400).json({ error: 'Title required (max 100 characters)' });
 
   db.run('INSERT INTO habits (user_id, title, category) VALUES (?, ?, ?)', [req.user.id, title, category || 'Personal'], function(err) {
     if (err) return res.status(500).json({ error: err.message });
