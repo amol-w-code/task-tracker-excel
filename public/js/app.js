@@ -20,11 +20,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const installBtn = document.getElementById('btn-install-pwa');
     if (!installBtn) return;
 
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                         window.matchMedia('(display-mode: fullscreen)').matches ||
+                         window.matchMedia('(display-mode: minimal-ui)').matches ||
+                         window.navigator.standalone === true;
+                         
     const isMarkedInstalled = localStorage.getItem('taskpulse_pwa_installed') === 'true';
 
     if (isStandalone || isMarkedInstalled) {
-      installBtn.style.display = 'none';
+      if (isStandalone) {
+        localStorage.setItem('taskpulse_pwa_installed', 'true');
+      }
+      installBtn.style.setProperty('display', 'none', 'important');
     } else {
       installBtn.style.display = 'flex';
     }
